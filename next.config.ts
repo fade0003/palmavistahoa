@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "export",
-  basePath: "/palmavistahoa",
+  // No basePath needed for Cloudflare Pages (serves from root)
   images: {
     unoptimized: true,
   },

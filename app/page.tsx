@@ -1,8 +1,8 @@
 import HeroBanner from "./components/HeroBanner";
 import PaymentRibbon from "./components/PaymentRibbon";
 import DocumentGrid from "./components/DocumentGrid";
-import ContactSection from "./components/ContactSection";
 import Footer from "./components/Footer";
+import ChatBot from "./components/ChatBot";
 
 export default function Home() {
   return (
@@ -10,8 +10,8 @@ export default function Home() {
       <HeroBanner />
       <PaymentRibbon />
       <DocumentGrid />
-      <ContactSection />
       <Footer />
+      <ChatBot />
     </main>
   );
 }
