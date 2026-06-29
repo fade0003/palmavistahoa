@@ -1,7 +1,7 @@
 // Cloudflare Pages Function — handles POST /api/chat
 // Runs as a Cloudflare Worker (edge function) keeping your API key secret
 
-import RULES_TEXT from "../../data/rules-text.js";
+import { RULES_TEXT } from "./rules-data";
 
 interface Env {
   OPENAI_API_KEY: string;
