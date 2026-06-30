@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Palma Vista — Admin Panel</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green: #1a4a3a;
+      --green-mid: #2d6b57;
+      --green-light: #3d8b6e;
+      --gold: #c9a84c;
+      --gold-light: #e4c97a;
+      --bg: #f4f6f5;
+      --white: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+      --danger: #dc2626;
+      --danger-light: #fef2f2;
+      --success: #16a34a;
+      --success-light: #f0fdf4;
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,0.12);
+    }
+    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 240px; min-height: 100vh; background: var(--green);
+      display: flex; flex-direction: column; position: fixed; top: 0; left: 0; z-index: 100;
+    }
+    .sidebar-logo {
+      padding: 24px 20px 20px; border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .sidebar-logo h1 { font-size: 16px; font-weight: 700; color: var(--gold-light); letter-spacing: 0.5px; }
+    .sidebar-logo p { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 2px; letter-spacing: 0.5px; text-transform: uppercase; }
+    .nav { padding: 16px 0; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 12px 20px; cursor: pointer; color: rgba(255,255,255,0.7);
+      font-size: 14px; font-weight: 500; border-left: 3px solid transparent;
+      transition: all 0.15s;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.07); color: white; }
+    .nav-item.active { background: rgba(255,255,255,0.1); color: white; border-left-color: var(--gold); }
+    .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
+    .sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.1); }
+    .sidebar-footer a { font-size: 12px; color: rgba(255,255,255,0.4); text-decoration: none; }
+    .sidebar-footer a:hover { color: white; }
+
+    /* Main */
+    .main { margin-left: 240px; flex: 1; min-height: 100vh; }
+    .topbar {
+      background: white; border-bottom: 1px solid var(--border);
+      padding: 16px 32px; display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar h2 { font-size: 20px; font-weight: 600; }
+    .page-content { padding: 32px; max-width: 900px; }
+
+    /* Cards */
+    .card { background: white; border-radius: var(--radius); border: 1px solid var(--border); box-shadow: var(--shadow); }
+    .card-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .card-header h3 { font-size: 15px; font-weight: 600; }
+    .card-body { padding: 24px; }
+
+    /* Forms */
+    .form-group { margin-bottom: 18px; }
+    label { display: block; font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 6px; }
+    input[type=text], input[type=email], input[type=tel], input[type=date], textarea, select {
+      width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px;
+      font-family: inherit; font-size: 14px; color: var(--text); background: white;
+      transition: border-color 0.15s, box-shadow 0.15s; outline: none;
+    }
+    input:focus, textarea:focus, select:focus {
+      border-color: var(--green-light); box-shadow: 0 0 0 3px rgba(61,139,110,0.1);
+    }
+    textarea { resize: vertical; min-height: 100px; }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; gap: 7px; padding: 9px 18px;
+      border-radius: 8px; font-family: inherit; font-size: 13px; font-weight: 600;
+      cursor: pointer; border: none; transition: all 0.15s; text-decoration: none;
+    }
+    .btn svg { width: 15px; height: 15px; }
+    .btn-primary { background: var(--green); color: white; }
+    .btn-primary:hover { background: var(--green-mid); }
+    .btn-gold { background: var(--gold); color: white; }
+    .btn-gold:hover { background: var(--gold-light); color: var(--text); }
+    .btn-ghost { background: transparent; color: var(--text-muted); border: 1px solid var(--border); }
+    .btn-ghost:hover { background: var(--bg); }
+    .btn-danger { background: var(--danger-light); color: var(--danger); border: 1px solid #fecaca; }
+    .btn-danger:hover { background: #fee2e2; }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+    .btn-icon { padding: 7px; border-radius: 6px; }
+
+    /* Toggle */
+    .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; }
+    .toggle { position: relative; width: 44px; height: 24px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0; background: #cbd5e1; border-radius: 24px;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .toggle-slider::before {
+      content: ''; position: absolute; height: 18px; width: 18px; left: 3px; bottom: 3px;
+      background: white; border-radius: 50%; transition: transform 0.2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .toggle input:checked + .toggle-slider { background: var(--green-light); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(20px); }
+
+    /* Item list */
+    .item-list { display: flex; flex-direction: column; gap: 10px; }
+    .item-row {
+      display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px;
+      border: 1px solid var(--border); border-radius: 8px; background: white;
+    }
+    .item-row:hover { border-color: #c7d2da; }
+    .item-content { flex: 1; min-width: 0; }
+    .item-title { font-size: 14px; font-weight: 600; }
+    .item-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+    .item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .badge {
+      display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px;
+      border-radius: 99px; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+    .badge-gold { background: #fef3c7; color: #92400e; }
+    .badge-green { background: var(--success-light); color: var(--success); }
+
+    /* Image upload area */
+    .upload-area {
+      border: 2px dashed var(--border); border-radius: 8px; padding: 32px;
+      text-align: center; cursor: pointer; transition: all 0.2s; background: var(--bg);
+    }
+    .upload-area:hover, .upload-area.drag-over {
+      border-color: var(--green-light); background: rgba(61,139,110,0.04);
+    }
+    .upload-area svg { width: 40px; height: 40px; color: var(--text-muted); margin-bottom: 10px; }
+    .upload-area p { font-size: 14px; color: var(--text-muted); }
+    .upload-area strong { color: var(--green); }
+
+    /* Gallery grid */
+    .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
+    .gallery-item { position: relative; border-radius: 8px; overflow: hidden; aspect-ratio: 1; border: 1px solid var(--border); }
+    .gallery-item img { width: 100%; height: 100%; object-fit: cover; }
+    .gallery-item-overlay {
+      position: absolute; inset: 0; background: rgba(0,0,0,0.6);
+      opacity: 0; transition: opacity 0.2s; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 8px; padding: 8px;
+    }
+    .gallery-item:hover .gallery-item-overlay { opacity: 1; }
+    .gallery-item-caption { font-size: 10px; color: rgba(255,255,255,0.8); text-align: center; }
+
+    /* Toast */
+    #toast-container { position: fixed; bottom: 24px; right: 24px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      padding: 12px 18px; border-radius: 8px; font-size: 14px; font-weight: 500;
+      box-shadow: var(--shadow-lg); animation: slideIn 0.2s ease;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .toast-success { background: var(--success); color: white; }
+    .toast-error { background: var(--danger); color: white; }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200;
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal {
+      background: white; border-radius: 12px; box-shadow: var(--shadow-lg);
+      width: 100%; max-width: 560px; max-height: 85vh; overflow-y: auto;
+    }
+    .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .modal-header h3 { font-size: 16px; font-weight: 700; }
+    .modal-body { padding: 24px; }
+    .modal-footer { padding: 16px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* Loading */
+    .loading { display: flex; align-items: center; justify-content: center; padding: 40px; color: var(--text-muted); gap: 10px; }
+    .spinner { width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--green); border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-state { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; }
+    .section-gap { margin-bottom: 24px; }
+    .divider { height: 1px; background: var(--border); margin: 20px 0; }
+    .hidden { display: none !important; }
+    .char-count { font-size: 11px; color: var(--text-muted); text-align: right; margin-top: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- Sidebar -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <h1>🌴 Palma Vista</h1>
+    <p>Admin Panel</p>
+  </div>
+  <nav class="nav">
+    <div class="nav-item active" onclick="showTab('announcements')" id="nav-announcements">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/></svg>
+      Announcements
+    </div>
+    <div class="nav-item" onclick="showTab('gallery')" id="nav-gallery">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+      Photo Gallery
+    </div>
+    <div class="nav-item" onclick="showTab('faq')" id="nav-faq">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      FAQ
+    </div>
+    <div class="nav-item" onclick="showTab('contacts')" id="nav-contacts">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+      Contact Info
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <a href="/" target="_blank">← View Live Site</a>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="main">
+  <div class="topbar">
+    <h2 id="page-title">Announcements</h2>
+    <div id="topbar-action"></div>
+  </div>
+  <div class="page-content">
+
+    <!-- ANNOUNCEMENTS TAB -->
+    <div id="tab-announcements">
+      <div class="section-gap">
+        <div class="card">
+          <div class="card-header">
+            <h3>Manage Announcements</h3>
+            <button class="btn btn-primary" onclick="openAnnouncementModal()">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+              New Announcement
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="announcement-list" class="item-list">
+              <div class="loading"><div class="spinner"></div> Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- GALLERY TAB -->
+    <div id="tab-gallery" class="hidden">
+      <div class="section-gap">
+        <div class="card">
+          <div class="card-header"><h3>Upload Photos</h3></div>
+          <div class="card-body">
+            <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+              <p><strong>Click to upload</strong> or drag photos here</p>
+              <p style="margin-top:4px;font-size:12px;">JPEG, PNG, WebP up to 10MB</p>
+            </div>
+            <input type="file" id="file-input" accept="image/*" multiple class="hidden" onchange="handleFileSelect(event)" />
+            <div id="upload-progress" class="hidden" style="margin-top:12px;">
+              <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden;">
+                <div id="progress-bar" style="height:100%;background:var(--green);width:0%;transition:width 0.3s;"></div>
+              </div>
+              <p style="font-size:12px;color:var(--text-muted);margin-top:6px;" id="upload-status">Uploading…</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3>Photo Library</h3></div>
+        <div class="card-body">
+          <div id="gallery-grid" class="gallery-grid"></div>
+          <div id="gallery-empty" class="empty-state hidden">No photos uploaded yet.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ TAB -->
+    <div id="tab-faq" class="hidden">
+      <div class="section-gap">
+        <div class="card">
+          <div class="card-header">
+            <h3>Frequently Asked Questions</h3>
+            <button class="btn btn-primary" onclick="openFAQModal()">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+              Add Question
+            </button>
+          </div>
+          <div class="card-body">
+            <div id="faq-list" class="item-list">
+              <div class="loading"><div class="spinner"></div> Loading…</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONTACTS TAB -->
+    <div id="tab-contacts" class="hidden">
+      <div class="card">
+        <div class="card-header"><h3>Management Company Contact Info</h3></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Company Name</label>
+              <input type="text" id="contact-company" placeholder="Sentry Management" />
+            </div>
+            <div class="form-group">
+              <label>Manager Name</label>
+              <input type="text" id="contact-manager" placeholder="Jane Smith" />
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Phone Number</label>
+              <input type="tel" id="contact-phone" placeholder="(407) 555-0100" />
+            </div>
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" id="contact-email" placeholder="manager@sentrymgt.com" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Office Hours</label>
+            <input type="text" id="contact-hours" placeholder="Monday–Friday, 9am–5pm" />
+          </div>
+          <div class="divider"></div>
+          <h4 style="font-size:14px;font-weight:600;margin-bottom:16px;color:var(--text-muted);">Gate Access Contact</h4>
+          <div class="form-group">
+            <label>Gate Decal Request Email</label>
+            <input type="email" id="contact-gate-email" placeholder="gateaccess@palmavistahoa.com" />
+          </div>
+          <div class="form-group">
+            <label>Gate Access Instructions</label>
+            <textarea id="contact-gate-instructions" rows="3" placeholder="To request a gate access decal, email the address above with your name and home address…"></textarea>
+          </div>
+          <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+            <button class="btn btn-primary" onclick="saveContacts()">
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              Save Contact Info
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /page-content -->
+</main>
+
+<!-- ANNOUNCEMENT MODAL -->
+<div id="announcement-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-announcement-title">New Announcement</h3>
+      <button class="btn btn-icon btn-ghost" onclick="closeModal('announcement-modal')">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" width="18" height="18"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ann-id" />
+      <div class="form-group">
+        <label>Title *</label>
+        <input type="text" id="ann-title" placeholder="Pool Closure Notice" maxlength="100" oninput="updateCharCount(this,'ann-title-count',100)" />
+        <div class="char-count"><span id="ann-title-count">0</span>/100</div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="ann-date" />
+        </div>
+        <div class="form-group">
+          <label style="visibility:hidden;">Pin</label>
+          <div class="toggle-row" style="border:1px solid var(--border);border-radius:8px;padding:10px 14px;">
+            <span style="font-size:14px;">📌 Pin to top</span>
+            <label class="toggle"><input type="checkbox" id="ann-pinned" /><span class="toggle-slider"></span></label>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Message *</label>
+        <textarea id="ann-body" rows="5" placeholder="Write your announcement here…" maxlength="2000" oninput="updateCharCount(this,'ann-body-count',2000)"></textarea>
+        <div class="char-count"><span id="ann-body-count">0</span>/2000</div>
+      </div>
+      <div class="form-group">
+        <label>Image (optional)</label>
+        <div class="upload-area" style="padding:16px;" onclick="document.getElementById('ann-img-input').click()">
+          <p style="font-size:13px;"><strong>Click to upload</strong> an image for this announcement</p>
+        </div>
+        <input type="file" id="ann-img-input" accept="image/*" class="hidden" onchange="uploadAnnouncementImage(event)" />
+        <div id="ann-img-preview" class="hidden" style="margin-top:12px;position:relative;display:inline-block;">
+          <img id="ann-img-thumb" style="max-height:120px;border-radius:8px;border:1px solid var(--border);" />
+          <button onclick="removeAnnouncementImage()" style="position:absolute;top:-8px;right:-8px;background:var(--danger);color:white;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">×</button>
+        </div>
+        <input type="hidden" id="ann-imageUrl" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('announcement-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAnnouncement()">Save Announcement</button>
+    </div>
+  </div>
+</div>
+
+<!-- FAQ MODAL -->
+<div id="faq-modal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="modal-faq-title">New FAQ Item</h3>
+      <button class="btn btn-icon btn-ghost" onclick="closeModal('faq-modal')">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" width="18" height="18"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="faq-id" />
+      <div class="form-group">
+        <label>Question *</label>
+        <input type="text" id="faq-question" placeholder="How do I submit an ARB application?" />
+      </div>
+      <div class="form-group">
+        <label>Answer *</label>
+        <textarea id="faq-answer" rows="5" placeholder="To submit an ARB application, download the form from the Documents section and email it to…"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('faq-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveFAQ()">Save FAQ Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- GALLERY CAPTION MODAL -->
+<div id="caption-modal" class="modal-overlay hidden">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-header">
+      <h3>Edit Photo</h3>
+      <button class="btn btn-icon btn-ghost" onclick="closeModal('caption-modal')">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" width="18" height="18"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="caption-id" />
+      <div style="text-align:center;margin-bottom:16px;">
+        <img id="caption-preview" style="max-height:160px;border-radius:8px;border:1px solid var(--border);" />
+      </div>
+      <div class="form-group">
+        <label>Caption</label>
+        <input type="text" id="caption-text" placeholder="Community BBQ 2026" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="deleteGalleryItem()">Delete Photo</button>
+      <button class="btn btn-ghost" onclick="closeModal('caption-modal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCaptionEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<script>
+// ─── State ───────────────────────────────────────────────────────────────────
+let announcements = [];
+let gallery = [];
+let faqs = [];
+let contacts = {};
+let currentTab = 'announcements';
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  loadAnnouncements();
+  setDefaultDate();
+});
+
+function setDefaultDate() {
+  const d = new Date();
+  document.getElementById('ann-date').value = d.toISOString().split('T')[0];
+}
+
+// ─── Tab navigation ──────────────────────────────────────────────────────────
+const TAB_TITLES = { announcements: 'Announcements', gallery: 'Photo Gallery', faq: 'FAQ', contacts: 'Contact Info' };
+
+function showTab(tab) {
+  document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.remove('hidden');
+  document.getElementById('nav-' + tab).classList.add('active');
+  document.getElementById('page-title').textContent = TAB_TITLES[tab];
+  currentTab = tab;
+  if (tab === 'gallery' && gallery.length === 0) loadGallery();
+  if (tab === 'faq' && faqs.length === 0) loadFAQ();
+  if (tab === 'contacts') loadContacts();
+}
+
+// ─── API helpers ─────────────────────────────────────────────────────────────
+async function apiGet(key) {
+  const res = await fetch(`/api/admin/content?key=${key}`);
+  if (!res.ok) throw new Error(`Failed to load ${key}`);
+  return res.json();
+}
+
+async function apiSave(key, data) {
+  const res = await fetch('/api/admin/content', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key, data }),
+  });
+  if (!res.ok) throw new Error('Save failed');
+  return res.json();
+}
+
+async function uploadImage(file) {
+  const fd = new FormData();
+  fd.append('file', file);
+  const res = await fetch('/api/admin/upload', { method: 'POST', body: fd });
+  if (!res.ok) throw new Error('Upload failed');
+  return res.json(); // { url, filename }
+}
+
+// ─── Announcements ────────────────────────────────────────────────────────────
+async function loadAnnouncements() {
+  try {
+    const data = await apiGet('announcements');
+    announcements = Array.isArray(data) ? data : [];
+    renderAnnouncements();
+  } catch {
+    document.getElementById('announcement-list').innerHTML = '<div class="empty-state">Failed to load announcements.</div>';
+  }
+}
+
+function renderAnnouncements() {
+  const el = document.getElementById('announcement-list');
+  if (announcements.length === 0) {
+    el.innerHTML = '<div class="empty-state">No announcements yet. Click "New Announcement" to add one.</div>';
+    return;
+  }
+  const sorted = [...announcements].sort((a,b) => {
+    if (a.pinned && !b.pinned) return -1;
+    if (!a.pinned && b.pinned) return 1;
+    return new Date(b.date) - new Date(a.date);
+  });
+  el.innerHTML = sorted.map(ann => `
+    <div class="item-row">
+      <div class="item-content">
+        <div class="item-title">
+          ${ann.pinned ? '<span class="badge badge-gold">Pinned</span> ' : ''}
+          ${escHtml(ann.title)}
+        </div>
+        <div class="item-meta">${formatDate(ann.date)} · ${ann.body.length > 80 ? escHtml(ann.body.slice(0,80))+'…' : escHtml(ann.body)}</div>
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-ghost btn-sm" onclick="editAnnouncement('${ann.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteAnnouncement('${ann.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openAnnouncementModal(id = null) {
+  document.getElementById('modal-announcement-title').textContent = id ? 'Edit Announcement' : 'New Announcement';
+  document.getElementById('ann-id').value = id ?? '';
+  document.getElementById('ann-title').value = '';
+  document.getElementById('ann-body').value = '';
+  document.getElementById('ann-pinned').checked = false;
+  document.getElementById('ann-imageUrl').value = '';
+  document.getElementById('ann-img-preview').classList.add('hidden');
+  setDefaultDate();
+  if (id) {
+    const ann = announcements.find(a => a.id === id);
+    if (ann) {
+      document.getElementById('ann-title').value = ann.title;
+      document.getElementById('ann-body').value = ann.body;
+      document.getElementById('ann-date').value = ann.date;
+      document.getElementById('ann-pinned').checked = ann.pinned;
+      document.getElementById('ann-imageUrl').value = ann.imageUrl ?? '';
+      if (ann.imageUrl) {
+        document.getElementById('ann-img-thumb').src = ann.imageUrl;
+        document.getElementById('ann-img-preview').classList.remove('hidden');
+      }
+      updateCharCount(document.getElementById('ann-title'), 'ann-title-count', 100);
+      updateCharCount(document.getElementById('ann-body'), 'ann-body-count', 2000);
+    }
+  }
+  document.getElementById('announcement-modal').classList.remove('hidden');
+}
+
+function editAnnouncement(id) { openAnnouncementModal(id); }
+
+async function deleteAnnouncement(id) {
+  if (!confirm('Delete this announcement?')) return;
+  announcements = announcements.filter(a => a.id !== id);
+  await apiSave('announcements', announcements);
+  renderAnnouncements();
+  toast('Announcement deleted', 'success');
+}
+
+async function saveAnnouncement() {
+  const title = document.getElementById('ann-title').value.trim();
+  const body = document.getElementById('ann-body').value.trim();
+  if (!title || !body) { toast('Title and message are required', 'error'); return; }
+  const id = document.getElementById('ann-id').value || crypto.randomUUID();
+  const ann = {
+    id,
+    title,
+    body,
+    date: document.getElementById('ann-date').value || new Date().toISOString().split('T')[0],
+    pinned: document.getElementById('ann-pinned').checked,
+    imageUrl: document.getElementById('ann-imageUrl').value || null,
+  };
+  const idx = announcements.findIndex(a => a.id === id);
+  if (idx >= 0) announcements[idx] = ann;
+  else announcements.unshift(ann);
+  await apiSave('announcements', announcements);
+  closeModal('announcement-modal');
+  renderAnnouncements();
+  toast('Announcement saved!', 'success');
+}
+
+async function uploadAnnouncementImage(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    toast('Uploading image…', 'success');
+    const { url } = await uploadImage(file);
+    document.getElementById('ann-imageUrl').value = url;
+    document.getElementById('ann-img-thumb').src = url;
+    document.getElementById('ann-img-preview').classList.remove('hidden');
+    toast('Image uploaded!', 'success');
+  } catch { toast('Image upload failed', 'error'); }
+}
+
+function removeAnnouncementImage() {
+  document.getElementById('ann-imageUrl').value = '';
+  document.getElementById('ann-img-preview').classList.add('hidden');
+}
+
+// ─── Gallery ─────────────────────────────────────────────────────────────────
+async function loadGallery() {
+  try {
+    const data = await apiGet('gallery');
+    gallery = Array.isArray(data) ? data : [];
+    renderGallery();
+  } catch {
+    toast('Failed to load gallery', 'error');
+  }
+}
+
+function renderGallery() {
+  const grid = document.getElementById('gallery-grid');
+  const empty = document.getElementById('gallery-empty');
+  if (gallery.length === 0) {
+    grid.innerHTML = '';
+    empty.classList.remove('hidden');
+    return;
+  }
+  empty.classList.add('hidden');
+  grid.innerHTML = gallery.map(item => `
+    <div class="gallery-item" onclick="openCaptionModal('${item.id}')">
+      <img src="${escHtml(item.url)}" alt="${escHtml(item.caption ?? '')}" loading="lazy" />
+      <div class="gallery-item-overlay">
+        <span style="font-size:22px;">✏️</span>
+        <div class="gallery-item-caption">${escHtml(item.caption ?? 'No caption')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function handleDragOver(e) { e.preventDefault(); document.getElementById('upload-area').classList.add('drag-over'); }
+function handleDragLeave() { document.getElementById('upload-area').classList.remove('drag-over'); }
+function handleDrop(e) { e.preventDefault(); handleDragLeave(); uploadFiles(Array.from(e.dataTransfer.files)); }
+function handleFileSelect(e) { uploadFiles(Array.from(e.target.files)); }
+
+async function uploadFiles(files) {
+  const imgs = files.filter(f => f.type.startsWith('image/'));
+  if (imgs.length === 0) { toast('Please select image files only', 'error'); return; }
+  document.getElementById('upload-progress').classList.remove('hidden');
+  for (let i = 0; i < imgs.length; i++) {
+    document.getElementById('upload-status').textContent = `Uploading ${i+1} of ${imgs.length}…`;
+    document.getElementById('progress-bar').style.width = `${((i)/imgs.length)*100}%`;
+    try {
+      const { url } = await uploadImage(imgs[i]);
+      gallery.unshift({ id: crypto.randomUUID(), url, caption: '', date: new Date().toISOString().split('T')[0] });
+    } catch { toast(`Failed to upload ${imgs[i].name}`, 'error'); }
+  }
+  await apiSave('gallery', gallery);
+  document.getElementById('progress-bar').style.width = '100%';
+  document.getElementById('upload-status').textContent = 'Done!';
+  setTimeout(() => document.getElementById('upload-progress').classList.add('hidden'), 1500);
+  renderGallery();
+  toast(`${imgs.length} photo${imgs.length>1?'s':''} uploaded!`, 'success');
+  document.getElementById('file-input').value = '';
+}
+
+function openCaptionModal(id) {
+  const item = gallery.find(g => g.id === id);
+  if (!item) return;
+  document.getElementById('caption-id').value = id;
+  document.getElementById('caption-preview').src = item.url;
+  document.getElementById('caption-text').value = item.caption ?? '';
+  document.getElementById('caption-modal').classList.remove('hidden');
+}
+
+async function saveCaptionEdit() {
+  const id = document.getElementById('caption-id').value;
+  const idx = gallery.findIndex(g => g.id === id);
+  if (idx < 0) return;
+  gallery[idx].caption = document.getElementById('caption-text').value;
+  await apiSave('gallery', gallery);
+  closeModal('caption-modal');
+  renderGallery();
+  toast('Caption saved!', 'success');
+}
+
+async function deleteGalleryItem() {
+  if (!confirm('Delete this photo?')) return;
+  const id = document.getElementById('caption-id').value;
+  gallery = gallery.filter(g => g.id !== id);
+  await apiSave('gallery', gallery);
+  closeModal('caption-modal');
+  renderGallery();
+  toast('Photo deleted', 'success');
+}
+
+// ─── FAQ ──────────────────────────────────────────────────────────────────────
+async function loadFAQ() {
+  try {
+    const data = await apiGet('faq');
+    faqs = Array.isArray(data) ? data : [];
+    renderFAQ();
+  } catch { toast('Failed to load FAQ', 'error'); }
+}
+
+function renderFAQ() {
+  const el = document.getElementById('faq-list');
+  if (faqs.length === 0) {
+    el.innerHTML = '<div class="empty-state">No FAQ items yet. Click "Add Question" to get started.</div>';
+    return;
+  }
+  el.innerHTML = faqs.map((faq, i) => `
+    <div class="item-row">
+      <div style="display:flex;flex-direction:column;gap:4px;margin-right:8px;">
+        <button class="btn btn-icon btn-ghost btn-sm" ${i===0?'disabled':''} onclick="moveFAQ('${faq.id}',-1)" style="padding:3px 5px;">▲</button>
+        <button class="btn btn-icon btn-ghost btn-sm" ${i===faqs.length-1?'disabled':''} onclick="moveFAQ('${faq.id}',1)" style="padding:3px 5px;">▼</button>
+      </div>
+      <div class="item-content">
+        <div class="item-title">Q: ${escHtml(faq.question)}</div>
+        <div class="item-meta">A: ${faq.answer.length > 100 ? escHtml(faq.answer.slice(0,100))+'…' : escHtml(faq.answer)}</div>
+      </div>
+      <div class="item-actions">
+        <button class="btn btn-ghost btn-sm" onclick="editFAQ('${faq.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="deleteFAQ('${faq.id}')">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function openFAQModal(id = null) {
+  document.getElementById('modal-faq-title').textContent = id ? 'Edit FAQ Item' : 'New FAQ Item';
+  document.getElementById('faq-id').value = id ?? '';
+  document.getElementById('faq-question').value = '';
+  document.getElementById('faq-answer').value = '';
+  if (id) {
+    const faq = faqs.find(f => f.id === id);
+    if (faq) {
+      document.getElementById('faq-question').value = faq.question;
+      document.getElementById('faq-answer').value = faq.answer;
+    }
+  }
+  document.getElementById('faq-modal').classList.remove('hidden');
+}
+
+function editFAQ(id) { openFAQModal(id); }
+
+async function deleteFAQ(id) {
+  if (!confirm('Delete this FAQ item?')) return;
+  faqs = faqs.filter(f => f.id !== id);
+  await apiSave('faq', faqs);
+  renderFAQ();
+  toast('FAQ item deleted', 'success');
+}
+
+async function moveFAQ(id, dir) {
+  const i = faqs.findIndex(f => f.id === id);
+  if (i < 0) return;
+  const j = i + dir;
+  if (j < 0 || j >= faqs.length) return;
+  [faqs[i], faqs[j]] = [faqs[j], faqs[i]];
+  await apiSave('faq', faqs);
+  renderFAQ();
+}
+
+async function saveFAQ() {
+  const question = document.getElementById('faq-question').value.trim();
+  const answer = document.getElementById('faq-answer').value.trim();
+  if (!question || !answer) { toast('Question and answer are required', 'error'); return; }
+  const id = document.getElementById('faq-id').value || crypto.randomUUID();
+  const item = { id, question, answer };
+  const idx = faqs.findIndex(f => f.id === id);
+  if (idx >= 0) faqs[idx] = item;
+  else faqs.push(item);
+  await apiSave('faq', faqs);
+  closeModal('faq-modal');
+  renderFAQ();
+  toast('FAQ item saved!', 'success');
+}
+
+// ─── Contacts ─────────────────────────────────────────────────────────────────
+async function loadContacts() {
+  try {
+    const data = await apiGet('contacts');
+    contacts = data && typeof data === 'object' ? data : {};
+    document.getElementById('contact-company').value = contacts.company ?? '';
+    document.getElementById('contact-manager').value = contacts.manager ?? '';
+    document.getElementById('contact-phone').value = contacts.phone ?? '';
+    document.getElementById('contact-email').value = contacts.email ?? '';
+    document.getElementById('contact-hours').value = contacts.officeHours ?? '';
+    document.getElementById('contact-gate-email').value = contacts.gateEmail ?? '';
+    document.getElementById('contact-gate-instructions').value = contacts.gateInstructions ?? '';
+  } catch { toast('Failed to load contacts', 'error'); }
+}
+
+async function saveContacts() {
+  const data = {
+    company: document.getElementById('contact-company').value.trim(),
+    manager: document.getElementById('contact-manager').value.trim(),
+    phone: document.getElementById('contact-phone').value.trim(),
+    email: document.getElementById('contact-email').value.trim(),
+    officeHours: document.getElementById('contact-hours').value.trim(),
+    gateEmail: document.getElementById('contact-gate-email').value.trim(),
+    gateInstructions: document.getElementById('contact-gate-instructions').value.trim(),
+  };
+  try {
+    await apiSave('contacts', data);
+    contacts = data;
+    toast('Contact info saved!', 'success');
+  } catch { toast('Save failed', 'error'); }
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+function updateCharCount(el, countId, max) { document.getElementById(countId).textContent = el.value.length; }
+function escHtml(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function formatDate(d) { if (!d) return ''; try { return new Date(d + 'T00:00:00').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'}); } catch { return d; } }
+
+function toast(msg, type = 'success') {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `<span>${type === 'success' ? '✓' : '✕'}</span> ${escHtml(msg)}`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+// Close modals on overlay click
+document.querySelectorAll('.modal-overlay').forEach(overlay => {
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.add('hidden'); });
+});
+</script>
+</body>
+</html>
