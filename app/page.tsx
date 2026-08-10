@@ -7,6 +7,7 @@ import Gallery from "./components/Gallery";
 import ContactSection from "./components/ContactSection";
 import Footer from "./components/Footer";
 import ChatBot from "./components/ChatBot";
+import FeedbackModal from "./components/FeedbackModal";
 
 export default function Home() {
   return (
@@ -20,6 +21,7 @@ export default function Home() {
       <ContactSection />
       <Footer />
       <ChatBot />
+      <FeedbackModal />
     </main>
   );
 }

@@ -1,6 +1,11 @@
 "use client";
 import Image from "next/image";
 
+function openChatBot() {
+  const btn = document.getElementById("hoa-chat-trigger") as HTMLButtonElement | null;
+  if (btn) btn.click();
+}
+
 export default function HeroBanner() {
   return (
     <>
@@ -42,6 +47,18 @@ export default function HeroBanner() {
         <p className="mt-6 max-w-xl text-lg font-light text-white/80 tracking-widest uppercase">
           A MetroWest Community
         </p>
+
+        {/* AI Assistant CTA */}
+        <button
+          onClick={openChatBot}
+          className="mt-10 flex items-center gap-2.5 rounded-full border border-white/30 bg-white/10 px-6 py-3 text-sm font-medium text-white backdrop-blur-sm transition-all duration-300 hover:bg-white/20 hover:border-white/60 hover:scale-105 hover:shadow-lg hover:shadow-emerald-900/30 focus:outline-none focus:ring-2 focus:ring-white/50"
+          aria-label="Open HOA AI Assistant"
+        >
+          <svg viewBox="0 0 24 24" className="h-4 w-4 flex-shrink-0" fill="currentColor" aria-hidden="true">
+            <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7H3a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13A2.5 2.5 0 0 0 5 15.5 2.5 2.5 0 0 0 7.5 18a2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 7.5 13m9 0A2.5 2.5 0 0 0 14 15.5a2.5 2.5 0 0 0 2.5 2.5 2.5 2.5 0 0 0 2.5-2.5A2.5 2.5 0 0 0 16.5 13M7 20h10v1a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-1z" />
+          </svg>
+          Chat with our AI Assistant →
+        </button>
 
         {/* Scroll cue */}
         <div className="absolute bottom-10 flex flex-col items-center gap-2 text-white/60 animate-bounce">

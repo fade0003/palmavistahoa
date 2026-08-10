@@ -55,6 +55,14 @@ export default function ChatBot() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [hasGreeted, setHasGreeted] = useState(false);
+  // Tooltip: show after 5s, hide after 12s or when chat opens
+  const [showTooltip, setShowTooltip] = useState(false);
+  const [tooltipDismissed, setTooltipDismissed] = useState(false);
+  // Notification badge: show until chat is first opened
+  const [showBadge, setShowBadge] = useState(true);
+  // Icon wobble animation
+  const [wobble, setWobble] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -79,6 +87,36 @@ export default function ChatBot() {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen, hasGreeted]);
+
+  // Tooltip: appear after 5s, auto-hide after 12s
+  useEffect(() => {
+    if (tooltipDismissed) return;
+    const showTimer = setTimeout(() => setShowTooltip(true), 5000);
+    const hideTimer = setTimeout(() => setShowTooltip(false), 17000);
+    return () => {
+      clearTimeout(showTimer);
+      clearTimeout(hideTimer);
+    };
+  }, [tooltipDismissed]);
+
+  // Hide tooltip & badge when chat is opened
+  useEffect(() => {
+    if (isOpen) {
+      setShowTooltip(false);
+      setTooltipDismissed(true);
+      setShowBadge(false);
+    }
+  }, [isOpen]);
+
+  // Icon wobble: trigger every 8 seconds when closed
+  useEffect(() => {
+    if (isOpen) return;
+    const wobbleInterval = setInterval(() => {
+      setWobble(true);
+      setTimeout(() => setWobble(false), 700);
+    }, 8000);
+    return () => clearInterval(wobbleInterval);
+  }, [isOpen]);
 
   const sendMessage = async (text?: string) => {
     const userText = (text ?? input).trim();
@@ -145,7 +183,7 @@ export default function ChatBot() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white leading-none">HOA Assistant</p>
-                <p className="mt-0.5 text-xs text-emerald-300">Palma Vista Rules & Regs</p>
+                <p className="mt-0.5 text-xs text-emerald-300">Palma Vista Rules &amp; Regs</p>
               </div>
             </div>
             <button
@@ -223,6 +261,7 @@ export default function ChatBot() {
               onKeyDown={handleKeyDown}
               placeholder="Ask about HOA rules..."
               disabled={isLoading}
+              maxLength={1000}
               className="flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 disabled:opacity-60 transition-colors"
               aria-label="Type your question"
             />
@@ -247,17 +286,38 @@ export default function ChatBot() {
         </div>
       )}
 
+      {/* Tooltip bubble — appears after 5s, auto-dismisses */}
+      {showTooltip && !isOpen && (
+        <div
+          className="fixed bottom-24 right-5 z-50 flex items-center gap-2 rounded-2xl bg-white px-4 py-3 shadow-xl border border-emerald-100 text-sm text-slate-700 font-medium animate-fadeSlideUp"
+          role="status"
+          aria-live="polite"
+        >
+          <span>👋 Have HOA questions? Ask me!</span>
+          <button
+            onClick={() => { setShowTooltip(false); setTooltipDismissed(true); }}
+            className="ml-1 rounded-full p-0.5 text-slate-400 hover:text-slate-600 transition-colors"
+            aria-label="Dismiss tip"
+          >
+            <CloseIcon />
+          </button>
+          {/* Pointing arrow */}
+          <span className="absolute -bottom-2 right-6 h-3 w-3 rotate-45 bg-white border-r border-b border-emerald-100" />
+        </div>
+      )}
+
       {/* Floating Trigger Button */}
       <button
         id="hoa-chat-trigger"
         onClick={() => setIsOpen((o) => !o)}
-        className={`fixed bottom-5 right-5 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all duration-300 ${
+        className={`fixed bottom-5 right-5 z-50 flex h-16 w-16 items-center justify-center rounded-full shadow-lg shadow-emerald-900/30 transition-all duration-300 ${
           isOpen
-            ? "bg-slate-600 hover:bg-slate-700 rotate-0"
-            : "bg-emerald-700 hover:bg-emerald-600 hover:scale-110"
-        }`}
+            ? "bg-slate-600 hover:bg-slate-700"
+            : "bg-emerald-500 hover:bg-emerald-400 hover:scale-110"
+        } ${wobble && !isOpen ? "animate-wobble" : ""}`}
         aria-label={isOpen ? "Close HOA Assistant" : "Open HOA Assistant chat"}
         aria-expanded={isOpen}
+        style={{ boxShadow: isOpen ? undefined : "0 0 0 4px rgba(52,211,153,0.25), 0 8px 24px rgba(6,95,70,0.35)" }}
       >
         {isOpen ? (
           <CloseIcon />
@@ -266,11 +326,35 @@ export default function ChatBot() {
             <BotIcon />
           </span>
         )}
-        {/* Pulse ring when closed */}
+        {/* Stronger pulse ring when closed */}
         {!isOpen && (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-20" />
+          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-40" />
+        )}
+        {/* Notification badge */}
+        {showBadge && !isOpen && (
+          <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] font-bold text-white shadow-sm">
+            1
+          </span>
         )}
       </button>
+
+      {/* Keyframe styles */}
+      <style>{`
+        @keyframes fadeSlideUp {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes wobble {
+          0%   { transform: rotate(0deg) scale(1.1); }
+          20%  { transform: rotate(-8deg) scale(1.1); }
+          40%  { transform: rotate(8deg) scale(1.1); }
+          60%  { transform: rotate(-5deg) scale(1.05); }
+          80%  { transform: rotate(3deg) scale(1.05); }
+          100% { transform: rotate(0deg) scale(1); }
+        }
+        .animate-fadeSlideUp { animation: fadeSlideUp 0.3s ease-out both; }
+        .animate-wobble { animation: wobble 0.7s ease-in-out; }
+      `}</style>
     </>
   );
 }

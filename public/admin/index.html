@@ -222,6 +222,10 @@
       <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
       Contact Info
     </div>
+    <div class="nav-item" onclick="showTab('feedback')" id="nav-feedback">
+      <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.8"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/></svg>
+      Suggestions
+    </div>
   </nav>
   <div class="sidebar-footer">
     <a href="/" target="_blank">← View Live Site</a>
@@ -350,6 +354,22 @@
               <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
               Save Contact Info
             </button>
+          </div>
+        </div>
+    </div>
+
+    <!-- FEEDBACK TAB -->
+    <div id="tab-feedback" class="hidden">
+      <div class="section-gap">
+        <div class="card">
+          <div class="card-header">
+            <h3>Resident Suggestions &amp; Feedback</h3>
+            <button class="btn btn-danger btn-sm" onclick="clearAllFeedback()">Clear All Feedback</button>
+          </div>
+          <div class="card-body">
+            <div id="feedback-list" class="item-list">
+              <div class="loading"><div class="spinner"></div> Loading…</div>
+            </div>
           </div>
         </div>
       </div>
@@ -489,7 +509,7 @@ function setDefaultDate() {
 }
 
 // ─── Tab navigation ──────────────────────────────────────────────────────────
-const TAB_TITLES = { announcements: 'Announcements', gallery: 'Photo Gallery', faq: 'FAQ', contacts: 'Contact Info' };
+const TAB_TITLES = { announcements: 'Announcements', gallery: 'Photo Gallery', faq: 'FAQ', contacts: 'Contact Info', feedback: 'Feedback & Suggestions' };
 
 function showTab(tab) {
   document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
@@ -501,6 +521,7 @@ function showTab(tab) {
   if (tab === 'gallery' && gallery.length === 0) loadGallery();
   if (tab === 'faq' && faqs.length === 0) loadFAQ();
   if (tab === 'contacts') loadContacts();
+  if (tab === 'feedback') loadFeedback();
 }
 
 // ─── API helpers ─────────────────────────────────────────────────────────────
@@ -845,6 +866,71 @@ async function saveContacts() {
     contacts = data;
     toast('Contact info saved!', 'success');
   } catch { toast('Save failed', 'error'); }
+}
+
+// ─── Feedback ────────────────────────────────────────────────────────────────
+let feedback = [];
+async function loadFeedback() {
+  try {
+    const data = await apiGet('feedback');
+    feedback = Array.isArray(data) ? data : [];
+    renderFeedback();
+  } catch {
+    document.getElementById('feedback-list').innerHTML = '<div class="empty-state">Failed to load suggestions.</div>';
+  }
+}
+
+function renderFeedback() {
+  const el = document.getElementById('feedback-list');
+  if (feedback.length === 0) {
+    el.innerHTML = '<div class="empty-state">No feedback submitted yet.</div>';
+    return;
+  }
+  el.innerHTML = feedback.map(item => `
+    <div class="item-row" style="flex-direction: column; gap: 8px;">
+      <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+        <span class="badge badge-gold">${escHtml(item.type)}</span>
+        <span style="font-size: 11px; color: var(--text-muted);">${formatDateTime(item.date)}</span>
+      </div>
+      <div style="font-size: 14px; line-height: 1.5; color: var(--text); font-weight: 500; white-space: pre-wrap; margin-top: 4px;">${escHtml(item.message)}</div>
+      <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; width: 100%;">
+        <div style="font-size: 12px; color: var(--text-muted);">
+          From: <strong>${escHtml(item.name || 'Anonymous')}</strong>
+          ${item.contact ? ` · Contact: <code>${escHtml(item.contact)}</code>` : ''}
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="deleteFeedbackItem('${item.id}')" style="padding: 4px 8px; font-size: 11px;">Delete</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function deleteFeedbackItem(id) {
+  if (!confirm('Delete this feedback submission?')) return;
+  feedback = feedback.filter(item => item.id !== id);
+  await apiSave('feedback', feedback);
+  renderFeedback();
+  toast('Submission deleted', 'success');
+}
+
+async function clearAllFeedback() {
+  if (!confirm('Delete ALL feedback submissions? This action cannot be undone.')) return;
+  feedback = [];
+  await apiSave('feedback', feedback);
+  renderFeedback();
+  toast('All feedback cleared', 'success');
+}
+
+function formatDateTime(d) {
+  if (!d) return '';
+  try {
+    return new Date(d).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch { return d; }
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────────

@@ -19,12 +19,12 @@ export default function PaymentRibbon() {
           href="https://sentrymgt.com"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-shrink-0 rounded-lg bg-orange-600 px-8 py-4 text-base font-semibold text-white shadow-lg
-                     transition-all duration-200 hover:bg-orange-500 hover:shadow-orange-500/30 hover:shadow-xl
-                     focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2 focus:ring-offset-emerald-800"
+          className="flex-shrink-0 rounded-lg bg-[#f5f2eb] px-8 py-4 text-base font-semibold text-[#1c2d27] shadow-lg
+                     transition-all duration-200 hover:bg-[#eae5da] hover:shadow-stone-500/20 hover:shadow-xl
+                     focus:outline-none focus:ring-2 focus:ring-[#f5f2eb] focus:ring-offset-2 focus:ring-offset-emerald-800"
         >
           Pay Dues &amp; Manage Account
-          <span className="ml-2 text-orange-200">via Sentry Management →</span>
+          <span className="ml-2 text-emerald-800">via Sentry Management →</span>
         </a>
       </div>
     </section>

@@ -5,7 +5,7 @@ interface Env {
   HOA_CONTENT: KVNamespace;
 }
 
-const VALID_KEYS = ["announcements", "faq", "gallery", "contacts"];
+const VALID_KEYS = ["announcements", "faq", "gallery", "contacts", "feedback"];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",

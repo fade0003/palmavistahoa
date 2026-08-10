@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 
 interface Document {
@@ -50,7 +53,7 @@ const DOCUMENTS: Document[] = [
   {
     title: "5th Amendment",
     category: "Amendments & Rights",
-    path: "/docs/5th_Amendment.pdf",
+    path: "/docs/Declaration_-_5th_Amend.pdf",
     description: "The fifth amendment to the Master Declaration.",
   },
   {
@@ -62,14 +65,14 @@ const DOCUMENTS: Document[] = [
   {
     title: "Easement Agreement",
     category: "Amendments & Rights",
-    path: "/docs/Easement.pdf",
+    path: "/docs/Easement_10-25-00.pdf",
     description: "Recorded easements affecting common areas and property boundaries.",
   },
   // Community Rules
   {
-    title: "MetroWest Rules & Regulations",
+    title: "Rules & Regulations (5th Amended)",
     category: "Community Rules",
-    path: "/docs/121021Rules_and_Regulations.pdf",
+    path: "/docs/PV_-_Rules_and_Regs_5th_Ameneded.pdf",
     description: "The current community rules governing use of property, common areas, and resident conduct.",
   },
   // Forms & Applications
@@ -171,13 +174,14 @@ function DocumentCard({ doc }: { doc: Document }) {
 }
 
 export default function DocumentGrid() {
+  const [isOpen, setIsOpen] = useState(false);
   const categories = Object.keys(CATEGORIES);
 
   return (
-    <section className="bg-slate-50 py-20 px-6">
+    <section className="bg-slate-50 py-16 px-6 border-b border-slate-100">
       <div className="mx-auto max-w-6xl">
         {/* Section header */}
-        <div className="mb-14 text-center">
+        <div className="text-center">
           <span className="inline-block rounded-full bg-orange-100 px-4 py-1.5 text-sm font-semibold uppercase tracking-widest text-orange-700">
             Community Documents
           </span>
@@ -185,34 +189,51 @@ export default function DocumentGrid() {
             Governing Documents &amp; Policies
           </h2>
           <p className="mt-3 text-slate-500 max-w-xl mx-auto">
-            Access all official HOA documents below. Click any card to open
-            the PDF in a new tab.
+            Official association charters, amendments, and design guidelines.
           </p>
+
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="mt-6 inline-flex items-center gap-2 rounded-xl bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-700 px-6 py-3 text-sm font-semibold shadow-sm transition-all focus:outline-none focus:ring-2 focus:ring-orange-400"
+            aria-expanded={isOpen}
+          >
+            {isOpen ? (
+              <>
+                Hide Governing Documents
+                <span className="text-xs transition-transform duration-200">▲</span>
+              </>
+            ) : (
+              <>
+                Show Governing Documents ({DOCUMENTS.length})
+                <span className="text-xs transition-transform duration-200">▼</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Documents grouped by category */}
-        <div className="space-y-12">
-          {categories.map((cat) => {
-            const catDocs = DOCUMENTS.filter((d) => d.category === cat);
-            if (!catDocs.length) return null;
-            return (
-              <div key={cat}>
-                <h3 className="mb-5 flex items-center gap-3 text-lg font-semibold text-slate-700">
-                  <span
-                    className={`h-px flex-1 bg-slate-200`}
-                  />
-                  {CATEGORIES[cat].label}
-                  <span className="h-px flex-1 bg-slate-200" />
-                </h3>
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
-                  {catDocs.map((doc) => (
-                    <DocumentCard key={doc.path} doc={doc} />
-                  ))}
+        {isOpen && (
+          <div className="space-y-12 mt-12 animate-fadeIn">
+            {categories.map((cat) => {
+              const catDocs = DOCUMENTS.filter((d) => d.category === cat);
+              if (!catDocs.length) return null;
+              return (
+                <div key={cat}>
+                  <h3 className="mb-5 flex items-center gap-3 text-lg font-semibold text-slate-700">
+                    <span className="h-px flex-1 bg-slate-200" />
+                    {CATEGORIES[cat].label}
+                    <span className="h-px flex-1 bg-slate-200" />
+                  </h3>
+                  <div className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+                    {catDocs.map((doc) => (
+                      <DocumentCard key={doc.path} doc={doc} />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </section>
   );
