@@ -44,14 +44,42 @@ The data route stays under `/violations` so it is not a public `/api` endpoint. 
 }
 ```
 
-Local preview (localhost only; no Access check, fake fixture):
+Field notes are separate from the weekly Sentry file. They are stored in D1 binding `FIELD_DB` (database `palmavista-field`) and private R2 binding `FIELD_PHOTOS` (bucket `palmavista-field-photos`, no public URL). Tables are created with `CREATE TABLE IF NOT EXISTS` on the first `/violations/field` request (`migrations/0001_field.sql` is the same SQL).
+
+| Piece | Value |
+| --- | --- |
+| Entries | `GET`/`POST /violations/field/entries`, `PATCH`/`DELETE /violations/field/entries/:id` |
+| Photos | `GET /violations/field/photos/:id`, R2 key `field/<homeId>/<entryId>/<n>.jpg` |
+| Author | `email` claim on the verified Access JWT |
+
+A disposition is keyed by the home id plus a hash of the violation date, code, and description, so it still matches after `violations.json` is replaced. Observations that no longer match a current row stay in the history. The client downscales photos to 1600px JPEG before upload. If a save fails because the phone is offline, it stays in IndexedDB and retries. Missing `FIELD_DB` or `FIELD_PHOTOS` returns an error JSON body instead of throwing.
+
+**Do not commit field notes, photos, or exports.** They are board records.
+
+Local preview of the static map only (no field storage):
 
 ```bash
 npm run build
 npm run preview:violations
 ```
 
-On localhost, `?demoGeo=lat,lon&follow=1` simulates a GPS fix and `?home=<id>` opens that home. Those query parameters are ignored on any other host.
+Local preview with the fake fixture, D1, and R2 (Access check is skipped only on localhost when `ACCESS_DEV_BYPASS=1`):
+
+```bash
+npm run build
+npx wrangler pages dev out --kv VIOLATIONS_KV --d1 FIELD_DB --r2 FIELD_PHOTOS \
+  --binding ACCESS_DEV_BYPASS=1 --binding ACCESS_DEV_EMAIL=board@example.test \
+  --compatibility-date 2026-06-29 --ip 127.0.0.1 --port 8788
+```
+
+If local KV has no `violations.json`, copy the fake fixture where the localhost bypass can read it (this file is not part of `npm run build`):
+
+```bash
+mkdir -p out/dev-fixtures
+cp fixtures/violations.sample.json out/dev-fixtures/violations.sample.json
+```
+
+On localhost, `?demoGeo=lat,lon&follow=1` simulates a GPS fix and `?home=<id>` opens that home. Those query parameters are ignored on any other host. `ACCESS_DEV_BYPASS` must not be set on the Pages project.
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 

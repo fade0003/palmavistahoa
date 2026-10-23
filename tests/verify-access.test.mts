@@ -8,6 +8,7 @@ import {
   DEFAULT_AUD,
   DEFAULT_TEAM_DOMAIN,
   issuerForTeam,
+  authenticateAccess,
   requireAccess,
   teamDomainFromEnv,
   verifyAccessJwt,
@@ -191,6 +192,50 @@ test("requireAccess returns 401 when the header is missing and 403 when it is in
   assert.ok(invalid);
   assert.equal(invalid.status, 403);
   assert.equal(invalid.headers.get("x-robots-tag"), "noindex");
+});
+
+test("authenticateAccess returns the email claim and ignores bypass off localhost", async () => {
+  clearAccessKeyCache();
+  const { privateKey, publicJwk } = await makeKey();
+  const token = await signToken(
+    privateKey,
+    payload({
+      email: "palingenstudios@gmail.com",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+    }),
+  );
+  const local = await authenticateAccess(
+    new Request("http://127.0.0.1:8788/violations/field/entries"),
+    { ACCESS_DEV_BYPASS: "1", ACCESS_DEV_EMAIL: "palingenstudios@gmail.com" },
+  );
+  assert.equal(local.ok, true);
+  if (local.ok) assert.equal(local.email, "palingenstudios@gmail.com");
+
+  const publicHost = await authenticateAccess(
+    new Request("https://www.palmavistahoa.com/violations/field/entries"),
+    { ACCESS_DEV_BYPASS: "1", ACCESS_DEV_EMAIL: "palingenstudios@gmail.com" },
+  );
+  assert.equal(publicHost.ok, false);
+
+  const original = globalThis.fetch;
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ keys: [publicJwk] }), {
+      status: 200,
+      headers: { "cache-control": "max-age=60" },
+    });
+  try {
+    const authed = await authenticateAccess(
+      new Request("https://www.palmavistahoa.com/violations/field/entries", {
+        headers: { "Cf-Access-Jwt-Assertion": token },
+      }),
+      {},
+    );
+    assert.equal(authed.ok, true);
+    if (authed.ok) assert.equal(authed.email, "palingenstudios@gmail.com");
+  } finally {
+    globalThis.fetch = original;
+    clearAccessKeyCache();
+  }
 });
 
 test("env overrides replace the default team domain and audience", async () => {

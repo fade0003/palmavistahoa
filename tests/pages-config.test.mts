@@ -21,6 +21,8 @@ test("protected functions check Access and public functions do not", () => {
   for (const file of protectedFiles) {
     assert.match(read(file), /requireAccess/);
   }
+  assert.match(read("functions/violations/field/[[path]].ts"), /authenticateAccess/);
+  assert.equal(existsSync("functions/violations/field.ts"), false);
 
   const publicFiles = [
     "functions/api/content.ts",

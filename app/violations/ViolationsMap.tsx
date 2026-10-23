@@ -1,9 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import type { Circle, CircleMarker, LayerGroup, Map as LeafletMap, TileLayer } from "leaflet";
-import { formatDate, formatDistance, formatMoney, haversineMeters } from "./geo";
+import { FieldPanel, latestHomeFieldLine } from "./FieldPanel";
+import { TopChrome, type ChromePanel } from "./TopChrome";
+import { driveSessionStart, shareFieldReport } from "./field/share";
+import { useFieldLog } from "./field/useFieldLog";
+import { formatDistance, formatMoney, haversineMeters } from "./geo";
+import { homeFieldCleared } from "../../lib/field/match";
 import { localSearchParam, readDemoGeo } from "./local-demo";
 import {
   isViolationsData,
@@ -13,7 +17,6 @@ import {
   type Home,
   type HomeFilter,
   type HomeStatus,
-  type ViolationItem,
   type ViolationsData,
 } from "./types";
 import "leaflet/dist/leaflet.css";
@@ -32,13 +35,6 @@ const OSM_ATTR =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const CENTER: [number, number] = [28.501, -81.459];
 const AUTO_OPEN_METERS = 30;
-
-const FILTERS: { id: HomeFilter; label: string }[] = [
-  { id: "all", label: "All" },
-  { id: "red", label: "Open 90+" },
-  { id: "orange", label: "Open <90" },
-  { id: "owes", label: "Owes money" },
-];
 
 function resolveLeaflet(mod: LeafletLib): LeafletLib {
   const wrapped = mod as LeafletLib & { default?: LeafletLib };
@@ -59,30 +55,12 @@ function escapeHtml(value: string): string {
   });
 }
 
-function markerHtml(address: string, status: HomeStatus, selected: boolean): string {
+function markerHtml(address: string, status: HomeStatus, selected: boolean, fieldOk: boolean): string {
   const selectedClass = selected ? " is-selected" : "";
-  const label = escapeHtml(`${address}, ${statusLabel(status)}`);
-  return `<div class="pv-marker pv-marker-${status}${selectedClass}" role="img" aria-label="${label}"></div>`;
-}
-
-function ItemList({ items }: { items: ViolationItem[] }) {
-  if (items.length === 0) return <p className="empty-copy">None</p>;
-  return (
-    <ul className="item-list">
-      {items.map((item, index) => (
-        <li key={`${item.date}-${item.code}-${index}`}>
-          <div className="item-top">
-            <time dateTime={item.date}>{formatDate(item.date)}</time>
-            <span>{item.ageDays} days</span>
-          </div>
-          <p>{item.description}</p>
-          <p className="meta">
-            {item.code} · {item.status}
-          </p>
-        </li>
-      ))}
-    </ul>
-  );
+  const fieldClass = fieldOk ? " is-field-ok" : "";
+  const badge = fieldOk ? `<span class="pv-check" aria-hidden="true">✓</span>` : "";
+  const label = escapeHtml(`${address}, ${statusLabel(status)}${fieldOk ? ", field resolved" : ""}`);
+  return `<div class="pv-marker pv-marker-${status}${selectedClass}${fieldClass}" role="img" aria-label="${label}">${badge}</div>`;
 }
 
 export default function ViolationsMap() {
@@ -113,8 +91,10 @@ export default function ViolationsMap() {
   const [mapError, setMapError] = useState<string | null>(null);
   const [filter, setFilter] = useState<HomeFilter>("all");
   const [query, setQuery] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [panel, setPanel] = useState<ChromePanel>(null);
+  const [clearedIds, setClearedIds] = useState<string[]>([]);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const field = useFieldLog();
   const [follow, setFollow] = useState(false);
   const [autoOpen, setAutoOpen] = useState(false);
   const [geo, setGeo] = useState<GeoFix | null>(null);
@@ -141,7 +121,7 @@ export default function ViolationsMap() {
     setActiveId(id);
     setSheet("peek");
     setQuery("");
-    setSearchOpen(false);
+    setPanel(null);
   }, []);
 
   const considerAutoOpen = useCallback((fix: GeoFix) => {
@@ -186,11 +166,13 @@ export default function ViolationsMap() {
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeSheet();
+      if (event.key !== "Escape") return;
+      if (panel) setPanel(null);
+      else closeSheet();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [closeSheet]);
+  }, [closeSheet, panel]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -307,7 +289,7 @@ export default function ViolationsMap() {
       const marker = L.marker([home.lat, home.lon], {
         icon: L.divIcon({
           className: "pv-divicon",
-          html: markerHtml(home.address, home.status, home.id === activeId),
+          html: markerHtml(home.address, home.status, home.id === activeId, clearedIds.includes(home.id)),
           iconSize: [44, 44],
           iconAnchor: [22, 22],
         }),
@@ -320,7 +302,7 @@ export default function ViolationsMap() {
     if (!fitted.current && homes.length > 0) {
       const bounds = L.latLngBounds(homes.map((home) => [home.lat, home.lon] as [number, number]));
       map.fitBounds(bounds, {
-        paddingTopLeft: [24, 180],
+        paddingTopLeft: [24, 72],
         paddingBottomRight: [24, 80],
         maxZoom: 17,
         animate: false,
@@ -328,7 +310,7 @@ export default function ViolationsMap() {
       fitted.current = true;
     }
     youDot.current?.bringToFront();
-  }, [homes, filter, activeId, mapReady]);
+  }, [homes, filter, activeId, mapReady, clearedIds]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -498,8 +480,44 @@ export default function ViolationsMap() {
     else if (Math.abs(dy) < 12) setSheet((current) => (current === "expanded" ? "peek" : "expanded"));
   }
 
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      const ids: string[] = [];
+      for (const home of homes) {
+        if (await homeFieldCleared(home, field.entries)) ids.push(home.id);
+      }
+      if (!cancel) setClearedIds(ids);
+    })();
+    return () => {
+      cancel = true;
+    };
+  }, [homes, field.entries]);
+
+  async function exportReport(scope: "home" | "drive" | "week" | "all") {
+    try {
+      const from =
+        scope === "drive"
+          ? driveSessionStart()
+          : scope === "week"
+            ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+            : undefined;
+      const message = await shareFieldReport({
+        homes,
+        entries: field.entries,
+        homeId: scope === "home" ? activeId ?? undefined : undefined,
+        from,
+      });
+      setExportMessage(message);
+    } catch (err) {
+      if ((err as { name?: string }).name === "AbortError") return;
+      setExportMessage(err instanceof Error ? err.message : "Could not export.");
+    }
+  }
+
   const sheetState: SheetState = activeHome ? sheet : "closed";
   const owed = activeHome?.arrears?.total ?? 0;
+  const fieldLine = activeHome ? latestHomeFieldLine(activeHome.id, field.entries) : null;
 
   return (
     <div
@@ -509,144 +527,43 @@ export default function ViolationsMap() {
     >
       <div ref={mapElement} className="violations-map" />
 
-      <div className="top-panel">
-        <div className="title-row">
-          <h1>Violations map</h1>
-          <Link className="portal-link" href="/">
-            Portal
-          </Link>
-        </div>
+      <h1 className="sr-only">Violations map</h1>
+      <TopChrome
+        panel={panel}
+        setPanel={setPanel}
+        query={query}
+        setQuery={setQuery}
+        results={results}
+        onSelect={(id) => selectHome(id, "search")}
+        filter={filter}
+        setFilter={setFilter}
+        counts={counts}
+        data={data}
+        pendingCount={field.pendingCount}
+        onExportDrive={() => void exportReport("drive")}
+        onExportWeek={() => void exportReport("week")}
+        onExportAll={() => void exportReport("all")}
+        searchId={searchId}
+        listId={listId}
+      />
 
-        <div className="search-row">
-          <input
-            id={searchId}
-            type="search"
-            placeholder="Search address"
-            autoComplete="off"
-            autoCorrect="off"
-            autoCapitalize="off"
-            enterKeyHint="search"
-            value={query}
-            role="combobox"
-            aria-expanded={searchOpen && query.trim().length > 0}
-            aria-controls={listId}
-            aria-autocomplete="list"
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setSearchOpen(true);
-            }}
-            onFocus={() => setSearchOpen(true)}
-          />
-          {query && (
-            <button type="button" className="icon-button" onClick={() => setQuery("")} aria-label="Clear search">
-              Clear
-            </button>
-          )}
+      {(dataError || mapError || geoError || field.storageError || exportMessage) && (
+        <div className="banner alert-banner" role="alert">
+          <p>{dataError || mapError || geoError || field.storageError || exportMessage}</p>
           <button
             type="button"
-            className="icon-button"
-            aria-expanded={summaryOpen}
-            onClick={() => setSummaryOpen((open) => !open)}
+            onClick={() => {
+              setDataError(null);
+              setMapError(null);
+              setGeoError(null);
+              field.clearStorageError();
+              setExportMessage(null);
+            }}
           >
-            Summary{data ? ` · ${data.summary.homesWithOpen}` : ""}
+            Dismiss
           </button>
-          {searchOpen && query.trim() && (
-            <ul className="results" id={listId} role="listbox">
-              {results.length === 0 && <li className="empty">No matching address</li>}
-              {results.map((home) => (
-                <li key={home.id}>
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={false}
-                    onPointerDown={(event) => event.preventDefault()}
-                    onClick={() => selectHome(home.id, "search")}
-                  >
-                    {home.address}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
-
-        <div className="chip-row" role="toolbar" aria-label="Filter homes">
-          {FILTERS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="chip"
-              aria-pressed={filter === item.id}
-              onClick={() => setFilter(item.id)}
-            >
-              {item.label}
-              <span className="count">{counts[item.id]}</span>
-            </button>
-          ))}
-        </div>
-
-        {summaryOpen && data && (
-          <section className="summary-card" aria-label="Violations summary">
-            <h2>Updated {formatDate(data.updated)}</h2>
-            <div className="stats">
-              <div className="stat">
-                <b>{data.summary.openItems}</b>
-                <span>Open items</span>
-              </div>
-              <div className="stat">
-                <b>{data.summary.homesWithOpen}</b>
-                <span>Homes with open items</span>
-              </div>
-              <div className="stat">
-                <b>{formatMoney(data.summary.arrearsTotal)}</b>
-                <span>Arrears</span>
-              </div>
-              <div className="stat">
-                <b>{formatMoney(data.summary.pastDue)}</b>
-                <span>Past due</span>
-              </div>
-              <div className="stat">
-                <b>{data.summary.inCollection}</b>
-                <span>In collection</span>
-              </div>
-            </div>
-            <div className="aging" aria-label="Open items by age">
-              {(Object.keys(data.summary.aging) as (keyof ViolationsData["summary"]["aging"])[]).map((key) => (
-                <span key={key}>
-                  {key}: {data.summary.aging[key]}
-                </span>
-              ))}
-            </div>
-            <div className="legend">
-              <span><i className="dot dot-red" /> Open 90+</span>
-              <span><i className="dot dot-orange" /> Open under 90</span>
-              <span><i className="dot dot-gray" /> None</span>
-            </div>
-            {data.sources && (
-              <p className="sources">
-                {data.sources.violations}
-                {data.sources.arrears ? ` · ${data.sources.arrears}` : ""}
-              </p>
-            )}
-          </section>
-        )}
-
-        {(dataError || mapError || geoError) && (
-          <div className="banner" role="alert">
-            <p>{dataError || mapError || geoError}</p>
-            <button
-              type="button"
-              onClick={() => {
-                setDataError(null);
-                setMapError(null);
-                setGeoError(null);
-              }}
-            >
-              Dismiss
-            </button>
-          </div>
-        )}
-      </div>
+      )}
 
       <div className="dock">
         {follow && (
@@ -755,6 +672,7 @@ export default function ViolationsMap() {
             <p className="counts-line">
               {activeHome.violations.length} violations · {activeHome.architectural.length} architectural · {formatMoney(owed)} owed
             </p>
+            {fieldLine && <p className="field-line peek-field">{fieldLine}</p>}
             <button
               type="button"
               className="details-button"
@@ -767,10 +685,17 @@ export default function ViolationsMap() {
           </div>
           {sheet === "expanded" && (
             <div className="sheet-scroll">
-              <h3>Violations</h3>
-              <ItemList items={activeHome.violations} />
-              <h3>Architectural</h3>
-              <ItemList items={activeHome.architectural} />
+              <FieldPanel
+                home={activeHome}
+                entries={field.entries}
+                viewerEmail={field.viewerEmail}
+                position={geo}
+                busy={field.flushing}
+                onCreate={field.create}
+                onPatch={field.patch}
+                onDelete={field.remove}
+                onExport={() => exportReport("home")}
+              />
               <h3>Arrears</h3>
               {activeHome.arrears ? (
                 <div className="arrears-card">

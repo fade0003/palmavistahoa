@@ -14,6 +14,9 @@ const DEFAULT_TTL_MS = 60 * 60 * 1000;
 export interface AccessEnv {
   ACCESS_TEAM_DOMAIN?: string;
   ACCESS_AUD?: string;
+  /** Local wrangler only. Ignored unless the request host is localhost. */
+  ACCESS_DEV_BYPASS?: string;
+  ACCESS_DEV_EMAIL?: string;
 }
 
 export interface AccessJwtPayload {
@@ -244,14 +247,43 @@ function accessFailure(status: 401 | 403, error: string): Response {
   );
 }
 
-/** Returns a 401/403 response when the Access JWT is missing or invalid, otherwise null. */
-export async function requireAccess(
+export type AccessIdentity =
+  | { ok: true; email: string | null; payload: AccessJwtPayload | null }
+  | { ok: false; response: Response };
+
+function localhostDevEmail(request: Request, env: AccessEnv): string | null {
+  if (env.ACCESS_DEV_BYPASS !== "1") return null;
+  let host = "";
+  try {
+    host = new URL(request.url).hostname;
+  } catch {
+    return null;
+  }
+  if (host !== "localhost" && host !== "127.0.0.1" && host !== "::1") return null;
+  const configured = env.ACCESS_DEV_EMAIL?.trim();
+  if (configured && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(configured)) return configured;
+  return "board@example.test";
+}
+
+function emailFromPayload(payload: AccessJwtPayload): string | null {
+  const value = payload.email;
+  if (typeof value !== "string") return null;
+  const email = value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+  return email;
+}
+
+/** Verifies the Access JWT and returns the email claim when the token has one. */
+export async function authenticateAccess(
   request: Request,
   env: AccessEnv = {},
-): Promise<Response | null> {
+): Promise<AccessIdentity> {
+  const devEmail = localhostDevEmail(request, env);
+  if (devEmail) return { ok: true, email: devEmail, payload: null };
+
   const token = request.headers.get("Cf-Access-Jwt-Assertion");
   if (!token || !token.trim()) {
-    return accessFailure(401, "Missing Cloudflare Access token");
+    return { ok: false, response: accessFailure(401, "Missing Cloudflare Access token") };
   }
   const domain = teamDomainFromEnv(env.ACCESS_TEAM_DOMAIN);
   const result = await verifyAccessJwt(token.trim(), {
@@ -259,9 +291,20 @@ export async function requireAccess(
     issuer: issuerForTeam(domain),
     certsUrl: certsUrlForTeam(domain),
   });
-  if (result.ok) return null;
-  console.error("Cloudflare Access JWT rejected:", result.reason);
-  return accessFailure(403, "Invalid Cloudflare Access token");
+  if (!result.ok) {
+    console.error("Cloudflare Access JWT rejected:", result.reason);
+    return { ok: false, response: accessFailure(403, "Invalid Cloudflare Access token") };
+  }
+  return { ok: true, email: emailFromPayload(result.payload), payload: result.payload };
+}
+
+/** Returns a 401/403 response when the Access JWT is missing or invalid, otherwise null. */
+export async function requireAccess(
+  request: Request,
+  env: AccessEnv = {},
+): Promise<Response | null> {
+  const result = await authenticateAccess(request, env);
+  return result.ok ? null : result.response;
 }
 
 export { bytesToBase64Url };

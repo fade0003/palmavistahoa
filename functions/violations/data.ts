@@ -9,6 +9,17 @@ import { VIOLATIONS_KEY, violationsDataResponse } from "../../lib/violations/res
 
 interface Env extends AccessEnv {
   VIOLATIONS_KV?: KVNamespace;
+  ASSETS?: { fetch: typeof fetch };
+}
+
+function localDev(request: Request, env: AccessEnv): boolean {
+  if (env.ACCESS_DEV_BYPASS !== "1") return false;
+  try {
+    const host = new URL(request.url).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
 }
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
@@ -19,7 +30,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   if (!kv) return violationsDataResponse({ bindingPresent: false });
 
   try {
-    const raw = await kv.get(VIOLATIONS_KEY, "text");
+    let raw = await kv.get(VIOLATIONS_KEY, "text");
+    if ((!raw || !raw.trim()) && localDev(context.request, context.env) && context.env.ASSETS) {
+      const asset = await context.env.ASSETS.fetch(new URL("/dev-fixtures/violations.sample.json", context.request.url));
+      if (asset.ok) raw = await asset.text();
+    }
     return violationsDataResponse({ bindingPresent: true, raw });
   } catch (err) {
     console.error("VIOLATIONS_KV read failed", err);
