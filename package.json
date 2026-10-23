@@ -6,15 +6,21 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test tests/verify-access.test.mts tests/violations-respond.test.mts tests/violations-fixture.test.mts tests/pages-config.test.mts",
+    "typecheck:functions": "tsc -p tsconfig.functions.json",
+    "preview:violations": "node scripts/serve-violations-preview.mjs"
   },
   "dependencies": {
+    "leaflet": "^1.9.4",
     "next": "16.2.4",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261023.1",
     "@tailwindcss/postcss": "^4",
+    "@types/leaflet": "^1.9.21",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

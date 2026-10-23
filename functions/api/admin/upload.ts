@@ -1,7 +1,9 @@
 // Protected image upload — POST /api/admin/upload
-// Access controlled by Cloudflare Access policy on /api/admin/*
+// Cloudflare Access covers /api/admin/*, and this function checks the Access JWT too.
 
-interface Env {
+import { requireAccess, type AccessEnv } from "../../../lib/access/verify-access";
+
+interface Env extends AccessEnv {
   HOA_MEDIA: R2Bucket;
 }
 
@@ -15,6 +17,9 @@ export const onRequestOptions: PagesFunction = async () =>
   new Response(null, { status: 204, headers: corsHeaders });
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const denied = await requireAccess(context.request, context.env);
+  if (denied) return denied;
+
   let formData: FormData;
   try {
     formData = await context.request.formData();

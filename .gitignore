@@ -39,4 +39,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-do_push.bat  
+do_push.bat
+
+# local Cloudflare state (may contain private KV data — never commit)
+.wrangler/
+.dev.vars

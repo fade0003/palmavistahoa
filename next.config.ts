@@ -2,8 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "export",
-  basePath: "/palmavistahoa",
-  assetPrefix: "/palmavistahoa",
+  // Cloudflare Pages serves this site at the domain root.
+  // Do not set basePath or assetPrefix (those were for GitHub Pages).
   images: {
     unoptimized: true,
   },
