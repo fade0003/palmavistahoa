@@ -12,6 +12,14 @@ export function localSearchParam(name: string): string | null {
   return new URLSearchParams(window.location.search).get(name);
 }
 
+export function readDemoHeading(): number | null {
+  const raw = localSearchParam("demoHeading");
+  if (raw == null || raw.trim() === "") return null;
+  const heading = Number(raw);
+  if (!Number.isFinite(heading)) return null;
+  return ((heading % 360) + 360) % 360;
+}
+
 export function readDemoGeo(): { lat: number; lon: number } | null {
   const raw = localSearchParam("demoGeo");
   if (!raw) return null;

@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/verify-access.test.mts tests/violations-respond.test.mts tests/violations-fixture.test.mts tests/pages-config.test.mts tests/field.test.mts",
+    "test": "node --test tests/verify-access.test.mts tests/violations-respond.test.mts tests/violations-fixture.test.mts tests/pages-config.test.mts tests/field.test.mts tests/heading.test.mts",
     "typecheck:functions": "tsc -p tsconfig.functions.json",
     "preview:violations": "node scripts/serve-violations-preview.mjs"
   },

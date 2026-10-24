@@ -4,7 +4,7 @@ Static Next.js site (`output: "export"`, directory `out`) for the Palma Vista ho
 
 ## Violations map
 
-`/violations` is a board-only map for a drive through the neighborhood. Access covers the page and the data URL.
+`/violations` is a board-only map for a drive through the neighborhood. Access covers the page and the data URL. Follow me keeps the phone centered and turns the map so the direction of travel is up: homes on the left and right of the street stay on the left and right of the screen. The red N marks north. Stopping Follow me, or dragging the map, points it north again.
 
 | Piece | Value |
 | --- | --- |

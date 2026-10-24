@@ -1,14 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import type { Circle, CircleMarker, LayerGroup, Map as LeafletMap, TileLayer } from "leaflet";
+import type { Circle, CircleMarker, LayerGroup, Map as LeafletMap, Marker, TileLayer } from "leaflet";
 import { FieldPanel, latestHomeFieldLine } from "./FieldPanel";
 import { TopChrome, type ChromePanel } from "./TopChrome";
 import { driveSessionStart, shareFieldReport } from "./field/share";
 import { useFieldLog } from "./field/useFieldLog";
 import { formatDistance, formatMoney, haversineMeters } from "./geo";
 import { homeFieldCleared } from "../../lib/field/match";
-import { localSearchParam, readDemoGeo } from "./local-demo";
+import {
+  angularDelta,
+  chooseHeading,
+  headingFromOrientation,
+  requestCompassAccess,
+  smoothHeading,
+} from "./heading";
+import { localSearchParam, readDemoGeo, readDemoHeading } from "./local-demo";
+import { attachMapBearing, type MapBearing } from "./map-bearing";
 import {
   isViolationsData,
   matchesFilter,
@@ -84,6 +92,16 @@ export default function ViolationsMap() {
   const dragRef = useRef<{ y: number } | null>(null);
   const lastPan = useRef<GeoFix | null>(null);
   const fitted = useRef(false);
+  const bearingRef = useRef<MapBearing | null>(null);
+  const needleRef = useRef<HTMLDivElement>(null);
+  const youArrow = useRef<Marker | null>(null);
+  const geoRef = useRef<GeoFix | null>(null);
+  const courseRef = useRef<number | null>(null);
+  const speedRef = useRef<number | null>(null);
+  const compassRef = useRef<number | null>(null);
+  const smoothedRef = useRef<number | null>(null);
+  const displayedHeading = useRef<number | null>(null);
+  const [compassAllowed, setCompassAllowed] = useState(false);
 
   const [mapReady, setMapReady] = useState(false);
   const [data, setData] = useState<ViolationsData | null>(null);
@@ -236,11 +254,21 @@ export default function ViolationsMap() {
           youPane.style.zIndex = "650";
           youPane.style.pointerEvents = "none";
         }
+        map.createPane("heading");
+        const headingPane = map.getPane("heading");
+        if (headingPane) {
+          headingPane.style.zIndex = "680";
+          headingPane.style.pointerEvents = "none";
+        }
+        bearingRef.current = attachMapBearing(map, L);
         imageryRef.current = L.tileLayer(ESRI, { attribution: ESRI_ATTR, maxZoom: 19 });
         streetRef.current = L.tileLayer(OSM, { attribution: OSM_ATTR, maxZoom: 19 });
         markersRef.current = L.layerGroup().addTo(map);
         map.on("dragstart", () => {
-          if (followRef.current) setFollow(false);
+          if (!followRef.current) return;
+          followRef.current = false;
+          bearingRef.current?.setHeading(null);
+          setFollow(false);
         });
         if (cancelled) {
           map.remove();
@@ -257,6 +285,10 @@ export default function ViolationsMap() {
     })();
     return () => {
       cancelled = true;
+      youArrow.current?.remove();
+      youArrow.current = null;
+      bearingRef.current?.destroy();
+      bearingRef.current = null;
       mapRef.current?.remove();
       mapRef.current = null;
       leafletRef.current = null;
@@ -322,6 +354,63 @@ export default function ViolationsMap() {
     map.setView(map.unproject(point, zoom), zoom, { animate: true });
   }, [activeId, activeHome, follow, mapReady]);
 
+  const showHeading = useCallback((degrees: number | null) => {
+    bearingRef.current?.setHeading(degrees);
+    if (needleRef.current) needleRef.current.style.transform = `rotate(${-(degrees ?? 0)}deg)`;
+    const map = mapRef.current;
+    const L = leafletRef.current;
+    const fix = geoRef.current;
+    if (!map || !L || degrees == null || !fix) {
+      youArrow.current?.remove();
+      youArrow.current = null;
+      return;
+    }
+    const latlng: [number, number] = [fix.lat, fix.lon];
+    if (!youArrow.current) {
+      youArrow.current = L.marker(latlng, {
+        pane: "heading",
+        interactive: false,
+        keyboard: false,
+        icon: L.divIcon({
+          className: "pv-you-icon",
+          html: '<div class="pv-you-arrow"></div>',
+          iconSize: [28, 40],
+          iconAnchor: [14, 40],
+        }),
+      }).addTo(map);
+    } else {
+      youArrow.current.setLatLng(latlng);
+    }
+    bearingRef.current?.refresh();
+  }, []);
+
+  const publishHeading = useCallback(() => {
+    if (!followRef.current) {
+      smoothedRef.current = null;
+      displayedHeading.current = null;
+      showHeading(null);
+      return;
+    }
+    const demo = readDemoHeading();
+    const target = chooseHeading({
+      demo,
+      course: courseRef.current,
+      speed: speedRef.current,
+      compass: compassRef.current,
+    });
+    if (target == null) {
+      smoothedRef.current = null;
+      displayedHeading.current = null;
+      showHeading(null);
+      return;
+    }
+    const next = demo == null ? smoothHeading(smoothedRef.current, target, 0.45) : target;
+    smoothedRef.current = next;
+    if (displayedHeading.current != null && Math.abs(angularDelta(displayedHeading.current, next)) < 0.8) return;
+    displayedHeading.current = next;
+    showHeading(next);
+  }, [showHeading]);
+
   const requestWakeLock = useCallback(async () => {
     if (!("wakeLock" in navigator)) return;
     try {
@@ -337,16 +426,25 @@ export default function ViolationsMap() {
       void wakeLockRef.current?.release().catch(() => {});
       wakeLockRef.current = null;
       lastPan.current = null;
+      courseRef.current = null;
+      speedRef.current = null;
+      compassRef.current = null;
+      smoothedRef.current = null;
+      displayedHeading.current = null;
+      showHeading(null);
       return;
     }
+    followRef.current = true;
 
     let stopWatch = () => {};
     const demo = readDemoGeo();
     if (demo) {
       const emit = () => {
         const fix = { lat: demo.lat, lon: demo.lon, accuracy: 18 };
+        geoRef.current = fix;
         setGeo(fix);
         considerAutoOpen(fix);
+        publishHeading();
       };
       emit();
       const id = window.setInterval(emit, 2000);
@@ -364,9 +462,15 @@ export default function ViolationsMap() {
             lon: position.coords.longitude,
             accuracy: position.coords.accuracy,
           };
+          const course = position.coords.heading;
+          const speed = position.coords.speed;
+          courseRef.current = typeof course === "number" && Number.isFinite(course) ? course : null;
+          speedRef.current = typeof speed === "number" && Number.isFinite(speed) ? speed : null;
+          geoRef.current = fix;
           setGeo(fix);
           setGeoError(null);
           considerAutoOpen(fix);
+          publishHeading();
         },
         (err) => {
           if (err.code === err.PERMISSION_DENIED) {
@@ -394,7 +498,33 @@ export default function ViolationsMap() {
       void wakeLockRef.current?.release().catch(() => {});
       wakeLockRef.current = null;
     };
-  }, [follow, requestWakeLock, considerAutoOpen]);
+  }, [follow, mapReady, requestWakeLock, considerAutoOpen, publishHeading, showHeading]);
+
+  useEffect(() => {
+    if (!follow || !compassAllowed) return;
+    let sawAbsolute = false;
+    const apply = (event: DeviceOrientationEvent, absoluteEvent: boolean) => {
+      const webkit = (event as DeviceOrientationEvent & { webkitCompassHeading?: number }).webkitCompassHeading;
+      const next = headingFromOrientation({
+        alpha: event.alpha,
+        absolute: Boolean(event.absolute || absoluteEvent),
+        webkitCompassHeading: webkit,
+      });
+      if (next == null) return;
+      if (absoluteEvent) sawAbsolute = true;
+      if (!absoluteEvent && sawAbsolute) return;
+      compassRef.current = next;
+      publishHeading();
+    };
+    const onAbsolute = (event: Event) => apply(event as DeviceOrientationEvent, true);
+    const onDevice = (event: Event) => apply(event as DeviceOrientationEvent, false);
+    window.addEventListener("deviceorientationabsolute", onAbsolute);
+    window.addEventListener("deviceorientation", onDevice);
+    return () => {
+      window.removeEventListener("deviceorientationabsolute", onAbsolute);
+      window.removeEventListener("deviceorientation", onDevice);
+    };
+  }, [follow, compassAllowed, publishHeading]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -528,6 +658,14 @@ export default function ViolationsMap() {
       <div ref={mapElement} className="violations-map" />
 
       <h1 className="sr-only">Violations map</h1>
+      {follow && (
+        <div className="north-chip" role="img" aria-label="North. The map turns so ahead is up.">
+          <div ref={needleRef} className="north-needle" aria-hidden="true">
+            <span>N</span>
+          </div>
+        </div>
+      )}
+
       <TopChrome
         panel={panel}
         setPanel={setPanel}
@@ -619,12 +757,14 @@ export default function ViolationsMap() {
             type="button"
             className="follow-button"
             aria-pressed={follow}
+            aria-label={follow ? "Following. The map is turned to your direction." : "Follow me"}
             onClick={() => {
               if (follow) {
                 setFollow(false);
                 return;
               }
               setGeoError(null);
+              void requestCompassAccess().then((allowed) => setCompassAllowed(allowed));
               setFollow(true);
               void requestWakeLock();
             }}
