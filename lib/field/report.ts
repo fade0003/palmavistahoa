@@ -35,7 +35,170 @@ function kindLabel(entry: ReportEntry): string {
   return "Note";
 }
 
-export function buildFieldReport(title: string, entries: ReportEntry[]): {
+export type ReportScope = "home" | "drive" | "week" | "all";
+
+export interface ReportOptions {
+  scope?: ReportScope;
+  sentAt?: string;
+  address?: string;
+}
+
+const EASTERN = "America/New_York";
+
+function formatLetterDate(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: EASTERN,
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function formatWhen(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const time = new Intl.DateTimeFormat("en-US", {
+    timeZone: EASTERN,
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+  return `${formatLetterDate(iso)} at ${time}`;
+}
+
+function formatDay(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value.trim());
+  if (!match) return value.trim();
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12));
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+function sentence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function photoSentence(count: number): string {
+  if (count <= 0) return "";
+  if (count === 1) return "One photo is included with this letter.";
+  if (count === 2) return "Two photos are included with this letter.";
+  return `${count} photos are included with this letter.`;
+}
+
+function opening(scope: ReportScope, sentLabel: string, address?: string): string {
+  if (scope === "home") {
+    const place = address?.trim() || "the selected home";
+    return `This letter reports what the Palma Vista HOA board observed at ${place} on ${sentLabel}.`;
+  }
+  if (scope === "drive") {
+    return `This letter reports what the Palma Vista HOA board observed during a community drive on ${sentLabel}.`;
+  }
+  if (scope === "week") {
+    return `This letter reports Palma Vista HOA board field observations from the seven days ending ${sentLabel}.`;
+  }
+  return `This letter reports the Palma Vista HOA board field observations on file as of ${sentLabel}.`;
+}
+
+function entryParagraph(entry: ReportEntry): string {
+  const when = formatWhen(entry.createdAt);
+  const note = sentence(entry.note);
+  const photos = photoSentence(entry.embedded.length);
+  const recorded = `Recorded by ${entry.authorEmail}.`;
+  if (entry.kind === "issue") {
+    return [
+      `On ${when}, a board member noted a new issue: ${entry.category ?? "Other"}.`,
+      note,
+      photos,
+      recorded,
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+  if (entry.kind === "note") {
+    return [`On ${when}, a board member recorded a property note.`, note, photos, recorded].filter(Boolean).join(" ");
+  }
+  const finding = entry.disposition === "resolved" ? "appeared resolved in the field" : "was still open in the field";
+  const details = [
+    entry.sentryDate ? `dated ${formatDay(entry.sentryDate)}` : "",
+    entry.sentryCode ? `code ${entry.sentryCode}` : "",
+    entry.sentryStatus ? `status ${entry.sentryStatus}` : "",
+  ].filter(Boolean);
+  const reference = details.length ? ` (${details.join(", ")})` : "";
+  const description = entry.sentryDescription?.trim()
+    ? ` The violation reads: ${sentence(entry.sentryDescription)}`
+    : "";
+  const historical = entry.historical ? " This item is no longer on the current violation list." : "";
+  return [
+    `On ${when}, a board member checked an open item${reference} and it ${finding}.${description}`,
+    note,
+    photos,
+    recorded + historical,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function letterText(entries: ReportEntry[], options: ReportOptions | undefined, groups: Map<string, ReportEntry[]>): string {
+  const sentAt = options?.sentAt ?? new Date().toISOString();
+  const sentLabel = formatLetterDate(sentAt);
+  const scope = options?.scope ?? "all";
+  const address = options?.address ?? entries[0]?.address;
+  const lines = [sentLabel, "", "Sentry Management,", "", opening(scope, sentLabel, address)];
+  if (groups.size === 0) {
+    lines.push("The board has no field observations to report for this period.");
+    lines.push("");
+  } else {
+    lines.push(
+      "These notes are separate from the weekly violation file. Please follow up where an item is still open or newly reported.",
+    );
+    lines.push("");
+  }
+  for (const [key, list] of groups) {
+    const [groupAddress] = key.split("\n");
+    lines.push(groupAddress);
+    lines.push("");
+    for (const entry of list) {
+      lines.push(entryParagraph(entry));
+      lines.push("");
+    }
+  }
+  lines.push("Thank you,");
+  lines.push("");
+  lines.push("Palma Vista Homeowners Association");
+  lines.push("Board of Directors");
+  return lines.join("\n").trim();
+}
+
+export function letterMailto(subject: string, letter: string, budget = 1800): string {
+  const base = `mailto:?subject=${encodeURIComponent(subject)}&body=`;
+  const full = `${base}${encodeURIComponent(letter)}`;
+  if (full.length <= budget) return full;
+  const note = "\n\nThe rest of this letter, and the photos, were saved on this phone.";
+  let low = 0;
+  let high = letter.length;
+  while (low < high) {
+    const mid = Math.floor((low + high + 1) / 2);
+    const candidate = `${letter.slice(0, mid).trimEnd()}…${note}`;
+    if (`${base}${encodeURIComponent(candidate)}`.length <= budget) low = mid;
+    else high = mid - 1;
+  }
+  const fitted = low > 0 ? `${letter.slice(0, low).trimEnd()}…${note}` : `Sentry Management,${note}`;
+  return `${base}${encodeURIComponent(fitted)}`;
+}
+
+export function buildFieldReport(
+  title: string,
+  entries: ReportEntry[],
+  options?: ReportOptions,
+): {
   html: string;
   csv: string;
   text: string;
@@ -49,7 +212,6 @@ export function buildFieldReport(title: string, entries: ReportEntry[]): {
   }
 
   const sections: string[] = [];
-  const textLines: string[] = [title, ""];
   for (const [key, list] of groups) {
     const [address] = key.split("\n");
     const cards = list
@@ -76,13 +238,6 @@ export function buildFieldReport(title: string, entries: ReportEntry[]): {
       })
       .join("");
     sections.push(`<section><h2>${escapeHtml(address)}</h2>${cards}</section>`);
-    textLines.push(address);
-    for (const entry of list) {
-      textLines.push(
-        `- ${kindLabel(entry)} ${entry.createdAt} by ${entry.authorEmail}${entry.note ? `: ${entry.note}` : ""}`,
-      );
-    }
-    textLines.push("");
   }
 
   const html = `<!DOCTYPE html>
@@ -100,7 +255,7 @@ export function buildFieldReport(title: string, entries: ReportEntry[]): {
 </head>
 <body>
 <h1>${escapeHtml(title)}</h1>
-<p>Field observations are separate from Sentry. Photos are embedded in this file.</p>
+<p>This file accompanies the Palma Vista HOA letter to Sentry Management. Photos are embedded below. These observations are separate from the weekly violation file.</p>
 ${sections.join("\n") || "<p>No field entries in this range.</p>"}
 </body>
 </html>`;
@@ -146,5 +301,5 @@ ${sections.join("\n") || "<p>No field entries in this range.</p>"}
       .join(","),
   );
   const csv = [header.join(","), ...rows].join("\n") + "\n";
-  return { html, csv, text: textLines.join("\n").trim() };
+  return { html, csv, text: letterText(entries, options, groups) };
 }

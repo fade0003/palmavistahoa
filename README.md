@@ -54,6 +54,8 @@ Field notes are separate from the weekly Sentry file. They are stored in D1 bind
 
 A disposition is keyed by the home id plus a hash of the violation date, code, and description, so it still matches after `violations.json` is replaced. Observations that no longer match a current row stay in the history. The client downscales photos to 1600px JPEG before upload. If a save fails because the phone is offline, it stays in IndexedDB and retries. Missing `FIELD_DB` or `FIELD_PHOTOS` returns an error JSON body instead of throwing.
 
+Email this home, this drive, the last 7 days, or all notes writes a plain-text letter to Sentry Management. The letter is the email body. Photos stay in the HTML file shared or saved with that letter. The recipient is left blank so the board member chooses the management address in Mail.
+
 **Do not commit field notes, photos, or exports.** They are board records.
 
 Local preview of the static map only (no field storage):

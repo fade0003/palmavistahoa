@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { violationKey } from "../lib/field/keys.ts";
 import { homeFieldCleared, latestDisposition } from "../lib/field/match.ts";
-import { buildFieldReport } from "../lib/field/report.ts";
+import { buildFieldReport, letterMailto } from "../lib/field/report.ts";
 import { fieldSchemaSql } from "../lib/field/schema.ts";
 import type { FieldEntry } from "../lib/field/types.ts";
 import { FieldInputError, cleanCategory, cleanNote, sniffImage } from "../lib/field/validate.ts";
@@ -79,18 +79,58 @@ test("schema migration matches the lazy init statements", () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS field_photos/);
 });
 
-test("report embeds photos and escapes address text", () => {
-  const report = buildFieldReport("Drive", [
-    {
-      ...entry(),
-      address: `104 <Example> Ct`,
-      historical: false,
-      embedded: [{ dataUri: "data:image/jpeg;base64,abc" }],
-    },
-  ]);
+test("report embeds photos and writes a letter to Sentry Management", () => {
+  const sentAt = "2026-10-24T15:00:00.000Z";
+  const report = buildFieldReport(
+    "Palma Vista HOA field observations — 104 <Example> Ct",
+    [
+      {
+        ...entry(),
+        address: `104 <Example> Ct`,
+        historical: false,
+        embedded: [{ dataUri: "data:image/jpeg;base64,abc" }],
+      },
+      {
+        ...entry({
+          id: "entry-2",
+          kind: "issue",
+          disposition: null,
+          category: "Lawn/landscaping",
+          note: "Edge needs edging",
+          sentryDate: null,
+          sentryCode: null,
+          sentryDescription: null,
+          sentryStatus: null,
+        }),
+        address: `104 <Example> Ct`,
+        historical: false,
+        embedded: [],
+      },
+    ],
+    { scope: "home", sentAt, address: "104 <Example> Ct" },
+  );
   assert.match(report.html, /104 &lt;Example&gt; Ct/);
   assert.match(report.html, /data:image\/jpeg;base64,abc/);
+  assert.match(report.html, /letter to Sentry Management/);
   assert.match(report.csv, /palingenstudios@gmail.com/);
-  assert.match(report.text, /Field: resolved/);
+  assert.match(report.text, /^October 24, 2026\n\nSentry Management,/);
+  assert.match(report.text, /observed at 104 <Example> Ct on October 24, 2026/);
+  assert.match(report.text, /appeared resolved in the field/);
+  assert.match(report.text, /dated January 2, 2026, code FIX-TRASH, status O-F1P/);
+  assert.match(report.text, /The violation reads: FIXTURE: example trash cart\./);
+  assert.match(report.text, /Cart was in\./);
+  assert.match(report.text, /One photo is included with this letter\./);
+  assert.match(report.text, /noted a new issue: Lawn\/landscaping/);
+  assert.match(report.text, /Palma Vista Homeowners Association\nBoard of Directors$/);
+  assert.doesNotMatch(report.text, /Field: resolved/);
+  assert.doesNotMatch(report.text, /HTML report was downloaded/);
   assert.doesNotMatch(report.html, /<script/);
+
+  const mail = letterMailto("Palma Vista HOA field observations", report.text);
+  assert.match(decodeURIComponent(mail), /Sentry Management/);
+  assert.doesNotMatch(decodeURIComponent(mail), /saved on this phone/);
+  const long = letterMailto("Subject", `${"Sentry Management,\n\n"}${"Observation. ".repeat(400)}`);
+  assert.ok(long.length <= 1800);
+  assert.match(decodeURIComponent(long), /Sentry Management/);
+  assert.match(decodeURIComponent(long), /saved on this phone/);
 });

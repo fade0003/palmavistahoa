@@ -208,10 +208,11 @@ export function TopChrome({
             <span><i className="dot dot-gray" /> None</span>
             <span><i className="dot dot-green" /> Field resolved</span>
           </div>
+          <p className="sources">Plain-text letter to Sentry Management.</p>
           <div className="export-row">
-            <button type="button" className="tool-button" onClick={onExportDrive}>This drive</button>
-            <button type="button" className="tool-button" onClick={onExportWeek}>Last 7 days</button>
-            <button type="button" className="tool-button" onClick={onExportAll}>All homes</button>
+            <button type="button" className="tool-button" onClick={onExportDrive}>Email this drive</button>
+            <button type="button" className="tool-button" onClick={onExportWeek}>Email last 7 days</button>
+            <button type="button" className="tool-button" onClick={onExportAll}>Email all notes</button>
           </div>
           {data.sources && (
             <p className="sources">

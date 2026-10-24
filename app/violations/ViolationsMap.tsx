@@ -641,6 +641,7 @@ export default function ViolationsMap() {
         entries: field.entries,
         homeId: scope === "home" ? activeId ?? undefined : undefined,
         from,
+        scope,
       });
       setExportMessage(message);
     } catch (err) {

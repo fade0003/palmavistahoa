@@ -290,7 +290,7 @@ export function FieldPanel({
           New issue
         </button>
         <button type="button" className="tool-button" onClick={() => void onExport()}>
-          Export this home
+          Email this home
         </button>
       </div>
       {message && <p className="field-line">{message}</p>}

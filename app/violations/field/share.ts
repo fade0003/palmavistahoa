@@ -1,5 +1,5 @@
 import { currentViolationKeys } from "../../../lib/field/match";
-import { buildFieldReport, type ReportEntry } from "../../../lib/field/report";
+import { buildFieldReport, letterMailto, type ReportEntry, type ReportScope } from "../../../lib/field/report";
 import type { FieldEntry } from "../../../lib/field/types";
 import type { Home } from "../types";
 
@@ -44,11 +44,25 @@ function download(filename: string, contents: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+function reportSubject(scope: ReportScope, sentAt: string, address?: string): string {
+  const day = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(sentAt));
+  if (scope === "home") return `Palma Vista HOA field observations — ${address ?? "home"}`;
+  if (scope === "drive") return `Palma Vista HOA field observations from today's drive — ${day}`;
+  if (scope === "week") return `Palma Vista HOA field observations, last 7 days — ${day}`;
+  return `Palma Vista HOA field observations — ${day}`;
+}
+
 export async function shareFieldReport(options: {
   homes: Home[];
   entries: FieldEntry[];
   homeId?: string;
   from?: string;
+  scope?: ReportScope;
 }): Promise<string> {
   const homesById = new Map(options.homes.map((home) => [home.id, home]));
   const filtered = options.entries.filter((entry) => {
@@ -75,29 +89,39 @@ export async function shareFieldReport(options: {
       embedded,
     });
   }
-  const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
-  const title = options.homeId
-    ? `Palma Vista field notes — ${homesById.get(options.homeId)?.address ?? "home"}`
-    : "Palma Vista field notes";
-  const report = buildFieldReport(title, reportEntries);
+  const sentAt = new Date().toISOString();
+  const stamp = sentAt.slice(0, 16).replace(/[:T]/g, "-");
+  const address = options.homeId ? homesById.get(options.homeId)?.address : undefined;
+  const scope: ReportScope = options.scope ?? (options.homeId ? "home" : "all");
+  const title = reportSubject(scope, sentAt, address);
+  const report = buildFieldReport(title, reportEntries, { scope, sentAt, address });
   const htmlName = `palma-vista-field-${stamp}.html`;
   const csvName = `palma-vista-field-${stamp}.csv`;
+  const textName = `palma-vista-field-${stamp}.txt`;
   const htmlFile = new File([report.html], htmlName, { type: "text/html" });
   const csvFile = new File([report.csv], csvName, { type: "text/csv" });
-  const summary = report.text.slice(0, 1500);
+  const textFile = new File([report.text], textName, { type: "text/plain" });
   const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
-  if (typeof nav.share === "function" && nav.canShare?.({ files: [htmlFile, csvFile] })) {
-    await nav.share({ files: [htmlFile, csvFile], title, text: summary });
-    return "Opened the share sheet.";
+  const packs = [
+    [textFile, htmlFile, csvFile],
+    [textFile, htmlFile],
+    [textFile],
+    [htmlFile],
+  ];
+  if (typeof nav.share === "function") {
+    for (const files of packs) {
+      if (!nav.canShare?.({ files })) continue;
+      await nav.share({ files, title, text: report.text });
+      const shared = new Set(files);
+      if (!shared.has(textFile)) download(textName, report.text, "text/plain");
+      if (!shared.has(htmlFile)) download(htmlName, report.html, "text/html");
+      if (!shared.has(csvFile)) download(csvName, report.csv, "text/csv");
+      return "Opened Mail with the letter to Sentry Management.";
+    }
   }
-  if (typeof nav.share === "function" && nav.canShare?.({ files: [htmlFile] })) {
-    await nav.share({ files: [htmlFile], title, text: summary });
-    download(csvName, report.csv, "text/csv");
-    return "Opened the share sheet and downloaded the CSV.";
-  }
+  download(textName, report.text, "text/plain");
   download(htmlName, report.html, "text/html");
   download(csvName, report.csv, "text/csv");
-  const mail = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(`${summary}\n\nThe HTML report was downloaded and includes the photos.`)}`;
-  window.location.href = mail;
-  return "Downloaded the report and opened Mail.";
+  window.location.href = letterMailto(title, report.text);
+  return "Saved the letter and opened Mail.";
 }
