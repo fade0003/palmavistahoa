@@ -354,16 +354,19 @@ export default function ViolationsMap() {
     map.setView(map.unproject(point, zoom), zoom, { animate: true });
   }, [activeId, activeHome, follow, mapReady]);
 
-  const showHeading = useCallback((degrees: number | null) => {
+  const showHeading = useCallback((degrees: number | null): boolean => {
+    if (degrees != null && !bearingRef.current) return false;
     bearingRef.current?.setHeading(degrees);
     if (needleRef.current) needleRef.current.style.transform = `rotate(${-(degrees ?? 0)}deg)`;
     const map = mapRef.current;
     const L = leafletRef.current;
     const fix = geoRef.current;
     if (!map || !L || degrees == null || !fix) {
-      youArrow.current?.remove();
-      youArrow.current = null;
-      return;
+      if (degrees == null) {
+        youArrow.current?.remove();
+        youArrow.current = null;
+      }
+      return degrees == null;
     }
     const latlng: [number, number] = [fix.lat, fix.lon];
     if (!youArrow.current) {
@@ -382,6 +385,7 @@ export default function ViolationsMap() {
       youArrow.current.setLatLng(latlng);
     }
     bearingRef.current?.refresh();
+    return true;
   }, []);
 
   const publishHeading = useCallback(() => {
@@ -407,8 +411,8 @@ export default function ViolationsMap() {
     const next = demo == null ? smoothHeading(smoothedRef.current, target, 0.45) : target;
     smoothedRef.current = next;
     if (displayedHeading.current != null && Math.abs(angularDelta(displayedHeading.current, next)) < 0.8) return;
+    if (!showHeading(next)) return;
     displayedHeading.current = next;
-    showHeading(next);
   }, [showHeading]);
 
   const requestWakeLock = useCallback(async () => {
@@ -658,7 +662,7 @@ export default function ViolationsMap() {
       <div ref={mapElement} className="violations-map" />
 
       <h1 className="sr-only">Violations map</h1>
-      {follow && (
+      {follow && panel == null && (
         <div className="north-chip" role="img" aria-label="North. The map turns so ahead is up.">
           <div ref={needleRef} className="north-needle" aria-hidden="true">
             <span>N</span>

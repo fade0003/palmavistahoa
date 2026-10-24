@@ -129,10 +129,14 @@ export function attachMapBearing(map: LeafletMap, L: LeafletLib): MapBearing {
   }
 
   function redrawTiles() {
-    map.eachLayer((layer) => {
-      expandTileCoverage(layer);
-      if (isTileLayer(layer)) layer.redraw();
-    });
+    try {
+      map.eachLayer((layer) => {
+        expandTileCoverage(layer);
+        if (isTileLayer(layer)) layer.redraw();
+      });
+    } catch (err) {
+      console.error("Map bearing tile refresh failed", err);
+    }
   }
 
   function onMove() {
@@ -189,15 +193,14 @@ export function attachMapBearing(map: LeafletMap, L: LeafletLib): MapBearing {
       const entered = want && !rotatedMode;
       const left = !want && rotatedMode;
       rotatedMode = want;
+      applyTransforms();
       if (left) {
-        applyTransforms();
         resetMarkers();
         redrawTiles();
         return;
       }
-      if (entered) redrawTiles();
-      applyTransforms();
       if (want) placeMarkers();
+      if (entered) redrawTiles();
     },
     refresh() {
       if (!rotatedMode) return;
