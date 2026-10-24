@@ -739,11 +739,14 @@ html.violations-lock body {
   box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
 }
 
-.chrome-sheet .chip-row,
-.chrome-sheet.summary-card {
+.chrome-sheet .chip-row {
   background: transparent;
   box-shadow: none;
   padding: 0;
+}
+
+.chrome-sheet.summary-card {
+  background: rgba(255, 255, 255, 0.98);
 }
 
 .chrome-sheet .sheet-title h2 {
