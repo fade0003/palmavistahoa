@@ -15,7 +15,9 @@ CREATE TABLE IF NOT EXISTS field_entries (
   sentry_date TEXT,
   sentry_code TEXT,
   sentry_description TEXT,
-  sentry_status TEXT
+  sentry_status TEXT,
+  report_status TEXT,
+  sent_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_field_entries_home ON field_entries (home_id, created_at);

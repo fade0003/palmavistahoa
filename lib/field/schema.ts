@@ -19,7 +19,9 @@ export const FIELD_SCHEMA: readonly string[] = [
     sentry_date TEXT,
     sentry_code TEXT,
     sentry_description TEXT,
-    sentry_status TEXT
+    sentry_status TEXT,
+    report_status TEXT,
+    sent_at TEXT
   )`,
   `CREATE INDEX IF NOT EXISTS idx_field_entries_home ON field_entries (home_id, created_at)`,
   `CREATE INDEX IF NOT EXISTS idx_field_entries_created ON field_entries (created_at)`,
@@ -38,4 +40,20 @@ export const FIELD_SCHEMA: readonly string[] = [
 
 export function fieldSchemaSql(): string {
   return `${FIELD_SCHEMA.join(";\n\n")};\n`;
+}
+
+// Columns added after the first field databases were created.
+// CREATE TABLE IF NOT EXISTS does not alter an existing table.
+export function reportStatusMigrations(existingColumns: readonly string[]): string[] {
+  const have = new Set(existingColumns);
+  const sql: string[] = [];
+  if (!have.has("report_status")) sql.push("ALTER TABLE field_entries ADD COLUMN report_status TEXT");
+  if (!have.has("sent_at")) sql.push("ALTER TABLE field_entries ADD COLUMN sent_at TEXT");
+  sql.push("UPDATE field_entries SET report_status = 'pending' WHERE report_status IS NULL");
+  sql.push("CREATE INDEX IF NOT EXISTS idx_field_entries_report ON field_entries (report_status, created_at)");
+  return sql;
+}
+
+export function reportStatusMigrationSql(existingColumns: readonly string[]): string {
+  return `${reportStatusMigrations(existingColumns).join(";\n\n")};\n`;
 }

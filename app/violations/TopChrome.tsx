@@ -4,7 +4,7 @@ import Link from "next/link";
 import { formatDate, formatMoney } from "./geo";
 import type { Home, HomeFilter, ViolationsData } from "./types";
 
-export type ChromePanel = "search" | "filters" | "summary" | null;
+export type ChromePanel = "search" | "filters" | "summary" | "queue" | null;
 
 const FILTERS: { id: HomeFilter; label: string }[] = [
   { id: "all", label: "All" },
@@ -51,6 +51,7 @@ export function TopChrome({
   counts,
   data,
   pendingCount,
+  unsentCount,
   onExportDrive,
   onExportWeek,
   onExportAll,
@@ -68,6 +69,7 @@ export function TopChrome({
   counts: Record<HomeFilter, number>;
   data: ViolationsData | null;
   pendingCount: number;
+  unsentCount: number;
   onExportDrive: () => void;
   onExportWeek: () => void;
   onExportAll: () => void;
@@ -91,7 +93,15 @@ export function TopChrome({
         <button type="button" className="icon-fab" aria-expanded={panel === "summary"} aria-label="Summary" onClick={() => toggle("summary")}>
           <IconInfo />
         </button>
-        {pendingCount > 0 && <span className="pending-pill">{pendingCount} pending</span>}
+        {pendingCount > 0 && <span className="pending-pill">{pendingCount} on phone</span>}
+        <button
+          type="button"
+          className="pending-pill queue-pill"
+          aria-expanded={panel === "queue"}
+          onClick={() => setPanel(panel === "queue" ? null : "queue")}
+        >
+          {unsentCount > 0 ? `${unsentCount} not sent` : "Sent list"}
+        </button>
         <Link className="portal-link bar-link" href="/">
           Portal
         </Link>
@@ -125,11 +135,17 @@ export function TopChrome({
             onChange={(event) => setQuery(event.target.value)}
           />
           <ul className="results" id={listId} role="listbox">
-            {query.trim() && results.length === 0 && <li className="empty">No matching address</li>}
+            <li className="empty">
+              {results.length === 0
+                ? query.trim()
+                  ? "No matching address"
+                  : "No homes loaded"
+                : `${results.length} homes. Tap one, or tap the map near a house.`}
+            </li>
             {results.map((home) => (
               <li key={home.id}>
                 <button type="button" role="option" aria-selected={false} onClick={() => onSelect(home.id)}>
-                  {home.address}
+                  <i className={`dot dot-${home.status}`} /> {home.address}
                 </button>
               </li>
             ))}
@@ -205,14 +221,19 @@ export function TopChrome({
           <div className="legend">
             <span><i className="dot dot-red" /> Open 90+</span>
             <span><i className="dot dot-orange" /> Open under 90</span>
-            <span><i className="dot dot-gray" /> None</span>
+            <span><i className="dot dot-quiet" /> No open violation</span>
             <span><i className="dot dot-green" /> Field resolved</span>
           </div>
-          <p className="sources">Plain-text letter to Sentry Management.</p>
+          <p className="sources">
+            {counts.all} homes are on this map. Filters brighten matches and leave every other home as a small dot.
+            A home left out of the loaded file has no dot.
+          </p>
+          <p className="sources">Plain-text letter to Sentry Management. Mark observations sent from the sent list.</p>
           <div className="export-row">
             <button type="button" className="tool-button" onClick={onExportDrive}>Email this drive</button>
             <button type="button" className="tool-button" onClick={onExportWeek}>Email last 7 days</button>
             <button type="button" className="tool-button" onClick={onExportAll}>Email all notes</button>
+            <button type="button" className="tool-button" onClick={() => setPanel("queue")}>Sent list</button>
           </div>
           {data.sources && (
             <p className="sources">

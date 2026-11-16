@@ -71,3 +71,12 @@ export function matchesFilter(home: Home, filter: HomeFilter): boolean {
   if (filter === "orange") return home.status === "orange";
   return owesMoney(home);
 }
+
+export type MarkerTone = "vivid" | "quiet";
+
+/** Open-violation homes stay bright. Every other loaded home stays on the map as a neutral dot. */
+export function markerTone(home: Home, filter: HomeFilter, activeId: string | null): MarkerTone {
+  if (home.id === activeId) return "vivid";
+  if (filter !== "all") return matchesFilter(home, filter) ? "vivid" : "quiet";
+  return home.status === "gray" ? "quiet" : "vivid";
+}

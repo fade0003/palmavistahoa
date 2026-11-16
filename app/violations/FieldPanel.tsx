@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { FIELD_CATEGORIES } from "../../lib/field/categories";
 import { violationKey } from "../../lib/field/keys";
 import { isOpenStatus, latestDisposition } from "../../lib/field/match";
-import type { FieldDisposition, FieldEntry } from "../../lib/field/types";
+import type { FieldDisposition, FieldEntry, ReportStatus } from "../../lib/field/types";
 import { capturePosition, compressPhoto } from "./field/compress";
 import type { FieldDraft } from "./field/useFieldLog";
 import { formatDate } from "./geo";
@@ -12,6 +12,15 @@ import type { Home, ViolationItem } from "./types";
 
 function itemIdentity(item: ViolationItem): string {
   return `${item.date}|${item.code}|${item.description}`;
+}
+
+function reportLabel(entry: FieldEntry): string {
+  if (entry.id.startsWith("local:") || entry.pending) return "On this phone";
+  if (entry.reportStatus === "sent") {
+    const day = entry.sentAt ? formatDate(entry.sentAt.slice(0, 10)) : "";
+    return day ? `Sent ${day}` : "Sent";
+  }
+  return "Not sent";
 }
 
 function fieldSentence(entry: FieldEntry): string {
@@ -161,6 +170,7 @@ export function FieldPanel({
   onCreate,
   onPatch,
   onDelete,
+  onSetReportStatus,
   onExport,
 }: {
   home: Home;
@@ -171,6 +181,7 @@ export function FieldPanel({
   onCreate: (draft: FieldDraft) => Promise<void>;
   onPatch: (id: string, patch: { note?: string; disposition?: FieldDisposition; category?: string }) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onSetReportStatus: (ids: string[], status: ReportStatus) => Promise<boolean>;
   onExport: () => Promise<void>;
 }) {
   const [keys, setKeys] = useState<Record<string, string>>({});
@@ -228,7 +239,7 @@ export function FieldPanel({
     setIssuePhotos([]);
     setIssueNote("");
     setIssueOpen(false);
-    setMessage("Issue recorded.");
+    setMessage("Issue recorded. It is not sent to Sentry yet.");
   }
 
   async function saveNote() {
@@ -246,7 +257,7 @@ export function FieldPanel({
       photos: [],
     });
     setPropertyNote("");
-    setMessage("Note recorded.");
+    setMessage("Note recorded. It is not sent to Sentry yet.");
   }
 
   function renderItems(title: string, items: ViolationItem[]) {
@@ -265,7 +276,7 @@ export function FieldPanel({
             busy={busy}
             onSave={async (draft) => {
               await onCreate({ ...draft, homeId: home.id, address: home.address, kind: "disposition" });
-              setMessage("Field observation recorded. Sentry status is unchanged.");
+              setMessage("Field observation recorded. It is not sent to Sentry yet. Sentry's own status is unchanged.");
             }}
           />
         ))}
@@ -366,7 +377,8 @@ export function FieldPanel({
             <li key={entry.id}>
               <p className="field-line">
                 {fieldSentence(entry)}
-                {entry.pending ? " · Pending" : ""}
+                {" · "}
+                {reportLabel(entry)}
                 {historical ? " · Earlier record" : ""}
               </p>
               {entry.category && <p className="meta">{entry.category}</p>}
@@ -385,6 +397,20 @@ export function FieldPanel({
                       <img className="thumb" src={photo.url} alt="Field photo" />
                     </a>
                   ))}
+                </div>
+              )}
+              {!entry.id.startsWith("local:") && (
+                <div className="inline-actions">
+                  <button
+                    type="button"
+                    className="tool-button"
+                    disabled={busy}
+                    onClick={() =>
+                      void onSetReportStatus([entry.id], entry.reportStatus === "sent" ? "pending" : "sent")
+                    }
+                  >
+                    {entry.reportStatus === "sent" ? "Mark not sent" : "Mark sent"}
+                  </button>
                 </div>
               )}
               {(mine || entry.pending) && (

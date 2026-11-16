@@ -4,7 +4,9 @@ import { test } from "node:test";
 import { violationKey } from "../lib/field/keys.ts";
 import { homeFieldCleared, latestDisposition } from "../lib/field/match.ts";
 import { buildFieldReport, letterMailto } from "../lib/field/report.ts";
-import { fieldSchemaSql } from "../lib/field/schema.ts";
+import { fieldSchemaSql, reportStatusMigrationSql } from "../lib/field/schema.ts";
+import { observationLedgerCsv } from "../lib/field/report-status.ts";
+import { cleanEntryIds, cleanReportStatus } from "../lib/field/validate.ts";
 import type { FieldEntry } from "../lib/field/types.ts";
 import { FieldInputError, cleanCategory, cleanNote, sniffImage } from "../lib/field/validate.ts";
 
@@ -34,6 +36,8 @@ function entry(overrides: Partial<FieldEntry> = {}): FieldEntry {
     sentryCode: item.code,
     sentryDescription: item.description,
     sentryStatus: item.status,
+    reportStatus: "pending",
+    sentAt: null,
     photos: [],
     ...overrides,
   };
@@ -76,7 +80,59 @@ test("schema migration matches the lazy init statements", () => {
   const normalize = (sql: string) => sql.replace(/\s+/g, " ").trim();
   assert.equal(normalize(migration), normalize(fieldSchemaSql()));
   assert.match(migration, /CREATE TABLE IF NOT EXISTS field_entries/);
+  assert.match(migration, /report_status TEXT/);
+  assert.match(migration, /sent_at TEXT/);
   assert.match(migration, /CREATE TABLE IF NOT EXISTS field_photos/);
+});
+
+const ORIGINAL_FIELD_COLUMNS = [
+  "id",
+  "home_id",
+  "address",
+  "kind",
+  "violation_key",
+  "disposition",
+  "category",
+  "note",
+  "lat",
+  "lon",
+  "author_email",
+  "created_at",
+  "updated_at",
+  "sentry_date",
+  "sentry_code",
+  "sentry_description",
+  "sentry_status",
+];
+
+test("report status migration upgrades an existing field database", () => {
+  const normalize = (sql: string) => sql.replace(/\s+/g, " ").trim();
+  const file = readFileSync("migrations/0002_report_status.sql", "utf8")
+    .split("\n")
+    .filter((line) => !line.trim().startsWith("--"))
+    .join("\n");
+  assert.equal(normalize(file), normalize(reportStatusMigrationSql(ORIGINAL_FIELD_COLUMNS)));
+  const fresh = reportStatusMigrationSql([...ORIGINAL_FIELD_COLUMNS, "report_status", "sent_at"]);
+  assert.doesNotMatch(fresh, /ADD COLUMN/);
+  assert.match(fresh, /report_status = 'pending'/);
+  assert.throws(() => cleanReportStatus("emailed"), /pending or sent/);
+  assert.equal(cleanReportStatus("sent"), "sent");
+  assert.deepEqual(cleanEntryIds(["AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"]), [
+    "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  ]);
+  assert.throws(() => cleanEntryIds(["local:1"]));
+});
+
+test("observation ledger lists not-sent rows before sent rows", () => {
+  const csv = observationLedgerCsv([
+    entry({ id: "11111111-1111-1111-1111-111111111111", reportStatus: "sent", sentAt: "2026-11-12T15:00:00.000Z", createdAt: "2026-11-11T15:00:00.000Z" }),
+    entry({ id: "22222222-2222-2222-2222-222222222222", address: "200 Sample Ln", note: "Still there" }),
+  ]);
+  const lines = csv.trim().split("\n");
+  assert.match(lines[0], /report_status,sent_at/);
+  assert.match(lines[1], /^pending,/);
+  assert.match(lines[1], /200 Sample Ln/);
+  assert.match(lines[2], /^sent,2026-11-12T15:00:00.000Z/);
 });
 
 test("report embeds photos and writes a letter to Sentry Management", () => {
@@ -113,6 +169,8 @@ test("report embeds photos and writes a letter to Sentry Management", () => {
   assert.match(report.html, /data:image\/jpeg;base64,abc/);
   assert.match(report.html, /letter to Sentry Management/);
   assert.match(report.csv, /palingenstudios@gmail.com/);
+  assert.match(report.csv, /report_status,sent_at/);
+  assert.match(report.csv, /,pending,/);
   assert.match(report.text, /^October 24, 2026\n\nSentry Management,/);
   assert.match(report.text, /observed at 104 <Example> Ct on October 24, 2026/);
   assert.match(report.text, /appeared resolved in the field/);

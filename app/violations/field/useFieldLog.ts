@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { violationKey } from "../../../lib/field/keys";
-import type { FieldDisposition, FieldEntry, FieldKind, SentrySnapshot } from "../../../lib/field/types";
+import type { FieldDisposition, FieldEntry, FieldKind, ReportStatus, SentrySnapshot } from "../../../lib/field/types";
 
 const DB_NAME = "pv-field-outbox";
 const STORE = "jobs";
@@ -161,6 +161,8 @@ function jobToEntry(job: Extract<OutboxJob, { op: "create" }>, previews: string[
     sentryCode: job.draft.sentry?.code ?? null,
     sentryDescription: job.draft.sentry?.description ?? null,
     sentryStatus: job.draft.sentry?.status ?? null,
+    reportStatus: "pending",
+    sentAt: null,
     photos: previews.map((url, index) => ({ id: `${job.id}-${index}`, url })),
     pending: true,
   };
@@ -374,6 +376,36 @@ export function useFieldLog() {
     [jobs, refresh],
   );
 
+  const markReportStatus = useCallback(
+    async (ids: string[], status: ReportStatus): Promise<boolean> => {
+      const serverIds = ids.filter((id) => !id.startsWith("local:"));
+      if (serverIds.length === 0) {
+        setStorageError("Save the observation before marking it sent.");
+        return false;
+      }
+      try {
+        const response = await fetch("/violations/field/report-status", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids: serverIds, status }),
+          cache: "no-store",
+        });
+        if (!response.ok) throw new FieldRequestError(response.status, await readError(response));
+        await refresh();
+        setStorageError(null);
+        return true;
+      } catch (error) {
+        if (shouldQueue(error)) {
+          setStorageError("Could not reach the server. Mark it sent when you have a signal.");
+          return false;
+        }
+        setStorageError(error instanceof Error ? error.message : "Could not update the sent status.");
+        return false;
+      }
+    },
+    [refresh],
+  );
+
   const remove = useCallback(
     async (entryId: string) => {
       if (entryId.startsWith("local:")) {
@@ -431,6 +463,7 @@ export function useFieldLog() {
     create,
     patch,
     remove,
+    markReportStatus,
     flush,
   };
 }

@@ -44,17 +44,29 @@ The data route stays under `/violations` so it is not a public `/api` endpoint. 
 }
 ```
 
-Field notes are separate from the weekly Sentry file. They are stored in D1 binding `FIELD_DB` (database `palmavista-field`) and private R2 binding `FIELD_PHOTOS` (bucket `palmavista-field-photos`, no public URL). Tables are created with `CREATE TABLE IF NOT EXISTS` on the first `/violations/field` request (`migrations/0001_field.sql` is the same SQL).
+Every home in that file is drawn. Red and orange dots are open violations. A home with no open violation is a smaller white dot, including while a filter is on, so it can still be tapped. Tapping the map selects the nearest loaded home within 45 meters. Search lists every loaded address.
+
+`violations.json` is the only address list this repo ships. Homes omitted from that file have no coordinates here and are not invented. An optional key `properties.json` in the same `VIOLATIONS_KV` namespace adds those homes as neutral dots with empty violations and no arrears. A home already present by id or address stays as it is in `violations.json`. Do not commit `properties.json`.
+
+```json
+{
+  "updated": "YYYY-MM-DD",
+  "homes": [{ "id": "12 hex characters", "address": "string", "lat": 0, "lon": 0 }]
+}
+```
+
+Field notes are separate from the weekly Sentry file. They are stored in D1 binding `FIELD_DB` (database `palmavista-field`) and private R2 binding `FIELD_PHOTOS` (bucket `palmavista-field-photos`, no public URL). Tables are created with `CREATE TABLE IF NOT EXISTS` on the first `/violations/field` request (`migrations/0001_field.sql` is the same SQL). Databases created before report status existed get `report_status` and `sent_at` on that same request (`migrations/0002_report_status.sql`).
 
 | Piece | Value |
 | --- | --- |
 | Entries | `GET`/`POST /violations/field/entries`, `PATCH`/`DELETE /violations/field/entries/:id` |
+| Sent status | `POST /violations/field/report-status` with `{ "ids": ["uuid"], "status": "pending" or "sent" }` |
 | Photos | `GET /violations/field/photos/:id`, R2 key `field/<homeId>/<entryId>/<n>.jpg` |
 | Author | `email` claim on the verified Access JWT |
 
 A disposition is keyed by the home id plus a hash of the violation date, code, and description, so it still matches after `violations.json` is replaced. Observations that no longer match a current row stay in the history. The client downscales photos to 1600px JPEG before upload. If a save fails because the phone is offline, it stays in IndexedDB and retries. Missing `FIELD_DB` or `FIELD_PHOTOS` returns an error JSON body instead of throwing.
 
-Email this home, this drive, the last 7 days, or all notes writes a plain-text letter to Sentry Management. The letter is the email body. Photos stay in the HTML file shared or saved with that letter. The recipient is left blank so the board member chooses the management address in Mail.
+Email this home, this drive, the last 7 days, or all notes writes a plain-text letter to Sentry Management. The letter is the email body. Photos stay in the HTML file shared or saved with that letter. The recipient is left blank so the board member chooses the management address in Mail. Sending the letter does not change status. New observations are `pending` until someone marks them `sent`; `sent_at` is the first time they were marked. The sent list on the map groups them and can export a CSV. "On phone" is the offline queue, not the Sentry status.
 
 **Do not commit field notes, photos, or exports.** They are board records.
 

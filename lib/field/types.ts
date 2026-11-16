@@ -1,5 +1,6 @@
 export type FieldKind = "disposition" | "note" | "issue";
 export type FieldDisposition = "resolved" | "still_open";
+export type ReportStatus = "pending" | "sent";
 
 export interface FieldPhoto {
   id: string;
@@ -24,7 +25,10 @@ export interface FieldEntry {
   sentryCode: string | null;
   sentryDescription: string | null;
   sentryStatus: string | null;
+  reportStatus: ReportStatus;
+  sentAt: string | null;
   photos: FieldPhoto[];
+  /** True only while this phone has not finished syncing the entry. Not a Sentry send state. */
   pending?: boolean;
 }
 

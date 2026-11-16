@@ -1,3 +1,21 @@
+/** Tap-to-address radius. Neighboring homes in this file are about 20–50 m apart. */
+export const SNAP_METERS = 45;
+
+export function nearestHome<T extends { lat: number; lon: number }>(
+  homes: readonly T[],
+  point: { lat: number; lon: number },
+  maxMeters: number,
+): { home: T; meters: number } | null {
+  let best: { home: T; meters: number } | null = null;
+  for (const home of homes) {
+    if (!Number.isFinite(home.lat) || !Number.isFinite(home.lon)) continue;
+    const meters = haversineMeters(point, home);
+    if (!Number.isFinite(meters) || meters > maxMeters) continue;
+    if (!best || meters < best.meters) best = { home, meters };
+  }
+  return best;
+}
+
 export function haversineMeters(
   a: { lat: number; lon: number },
   b: { lat: number; lon: number },

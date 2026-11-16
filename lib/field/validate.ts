@@ -1,5 +1,5 @@
 import { isFieldCategory } from "./categories.ts";
-import type { FieldDisposition, FieldKind, SentrySnapshot } from "./types.ts";
+import type { FieldDisposition, FieldKind, ReportStatus, SentrySnapshot } from "./types.ts";
 
 export const MAX_NOTE_LENGTH = 2000;
 export const MAX_PHOTOS = 4;
@@ -7,7 +7,9 @@ export const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 export const MAX_ADDRESS_LENGTH = 200;
 
 const HOME_ID = /^[a-f0-9]{8,64}$/i;
+const ENTRY_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
+const MAX_STATUS_BATCH = 200;
 
 export class FieldInputError extends Error {
   status: number;
@@ -48,6 +50,24 @@ export function cleanAddress(value: unknown): string {
 export function cleanKind(value: unknown): FieldKind {
   if (value === "disposition" || value === "note" || value === "issue") return value;
   throw new FieldInputError("Unknown field entry type.");
+}
+
+export function cleanReportStatus(value: unknown): ReportStatus {
+  if (value === "pending" || value === "sent") return value;
+  throw new FieldInputError("Status must be pending or sent.");
+}
+
+export function cleanEntryIds(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > MAX_STATUS_BATCH) {
+    throw new FieldInputError("Choose at least one saved observation.");
+  }
+  const ids = value.map((id) => {
+    if (typeof id !== "string" || !ENTRY_ID.test(id.trim())) {
+      throw new FieldInputError("Observation id is not valid.");
+    }
+    return id.trim().toLowerCase();
+  });
+  return [...new Set(ids)];
 }
 
 export function cleanDisposition(value: unknown): FieldDisposition {

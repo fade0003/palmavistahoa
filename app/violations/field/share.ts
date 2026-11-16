@@ -57,13 +57,28 @@ function reportSubject(scope: ReportScope, sentAt: string, address?: string): st
   return `Palma Vista HOA field observations — ${day}`;
 }
 
+export interface ShareResult {
+  message: string;
+  entryIds: string[];
+}
+
+export async function shareTextFile(filename: string, contents: string, type: string): Promise<void> {
+  const file = new File([contents], filename, { type });
+  const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+  if (typeof nav.share === "function" && nav.canShare?.({ files: [file] })) {
+    await nav.share({ files: [file], title: filename });
+    return;
+  }
+  download(filename, contents, type);
+}
+
 export async function shareFieldReport(options: {
   homes: Home[];
   entries: FieldEntry[];
   homeId?: string;
   from?: string;
   scope?: ReportScope;
-}): Promise<string> {
+}): Promise<ShareResult> {
   const homesById = new Map(options.homes.map((home) => [home.id, home]));
   const filtered = options.entries.filter((entry) => {
     if (options.homeId && entry.homeId !== options.homeId) return false;
@@ -89,6 +104,7 @@ export async function shareFieldReport(options: {
       embedded,
     });
   }
+  const entryIds = reportEntries.map((entry) => entry.id).filter((id) => !id.startsWith("local:"));
   const sentAt = new Date().toISOString();
   const stamp = sentAt.slice(0, 16).replace(/[:T]/g, "-");
   const address = options.homeId ? homesById.get(options.homeId)?.address : undefined;
@@ -116,12 +132,12 @@ export async function shareFieldReport(options: {
       if (!shared.has(textFile)) download(textName, report.text, "text/plain");
       if (!shared.has(htmlFile)) download(htmlName, report.html, "text/html");
       if (!shared.has(csvFile)) download(csvName, report.csv, "text/csv");
-      return "Opened Mail with the letter to Sentry Management.";
+      return { message: "Opened Mail with the letter to Sentry Management.", entryIds };
     }
   }
   download(textName, report.text, "text/plain");
   download(htmlName, report.html, "text/html");
   download(csvName, report.csv, "text/csv");
   window.location.href = letterMailto(title, report.text);
-  return "Saved the letter and opened Mail.";
+  return { message: "Saved the letter and opened Mail.", entryIds };
 }

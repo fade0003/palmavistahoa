@@ -277,6 +277,8 @@ ${sections.join("\n") || "<p>No field entries in this range.</p>"}
     "sentry_description",
     "historical",
     "photo_count",
+    "report_status",
+    "sent_at",
   ];
   const rows = entries.map((entry) =>
     [
@@ -296,6 +298,8 @@ ${sections.join("\n") || "<p>No field entries in this range.</p>"}
       entry.sentryDescription ?? "",
       entry.historical ? "yes" : "no",
       String(entry.embedded.length),
+      entry.reportStatus === "sent" ? "sent" : "pending",
+      entry.sentAt ?? "",
     ]
       .map(csvCell)
       .join(","),

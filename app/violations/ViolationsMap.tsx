@@ -3,10 +3,11 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Circle, CircleMarker, LayerGroup, Map as LeafletMap, Marker, TileLayer } from "leaflet";
 import { FieldPanel, latestHomeFieldLine } from "./FieldPanel";
+import { SentryQueue } from "./SentryQueue";
 import { TopChrome, type ChromePanel } from "./TopChrome";
 import { driveSessionStart, shareFieldReport } from "./field/share";
 import { useFieldLog } from "./field/useFieldLog";
-import { formatDistance, formatMoney, haversineMeters } from "./geo";
+import { SNAP_METERS, formatDistance, formatMoney, haversineMeters, nearestHome } from "./geo";
 import { homeFieldCleared } from "../../lib/field/match";
 import {
   angularDelta,
@@ -19,7 +20,7 @@ import { localSearchParam, readDemoGeo, readDemoHeading } from "./local-demo";
 import { attachMapBearing, type MapBearing } from "./map-bearing";
 import {
   isViolationsData,
-  matchesFilter,
+  markerTone,
   owesMoney,
   statusLabel,
   type Home,
@@ -63,12 +64,19 @@ function escapeHtml(value: string): string {
   });
 }
 
-function markerHtml(address: string, status: HomeStatus, selected: boolean, fieldOk: boolean): string {
+function markerHtml(
+  address: string,
+  status: HomeStatus,
+  selected: boolean,
+  fieldOk: boolean,
+  quiet: boolean,
+): string {
   const selectedClass = selected ? " is-selected" : "";
   const fieldClass = fieldOk ? " is-field-ok" : "";
+  const quietClass = quiet ? " pv-marker-quiet" : "";
   const badge = fieldOk ? `<span class="pv-check" aria-hidden="true">✓</span>` : "";
   const label = escapeHtml(`${address}, ${statusLabel(status)}${fieldOk ? ", field resolved" : ""}`);
-  return `<div class="pv-marker pv-marker-${status}${selectedClass}${fieldClass}" role="img" aria-label="${label}">${badge}</div>`;
+  return `<div class="pv-marker pv-marker-${status}${selectedClass}${fieldClass}${quietClass}" role="img" aria-label="${label}">${badge}</div>`;
 }
 
 export default function ViolationsMap() {
@@ -112,6 +120,7 @@ export default function ViolationsMap() {
   const [panel, setPanel] = useState<ChromePanel>(null);
   const [clearedIds, setClearedIds] = useState<string[]>([]);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [sentPrompt, setSentPrompt] = useState<{ message: string; ids: string[] } | null>(null);
   const field = useFieldLog();
   const [follow, setFollow] = useState(false);
   const [autoOpen, setAutoOpen] = useState(false);
@@ -176,6 +185,11 @@ export default function ViolationsMap() {
     setActiveId(null);
     setSheet("closed");
   }, []);
+
+  const setChrome = useCallback((next: ChromePanel) => {
+    setPanel(next);
+    if (next) closeSheet();
+  }, [closeSheet]);
 
   useEffect(() => {
     document.documentElement.classList.add("violations-lock");
@@ -270,6 +284,15 @@ export default function ViolationsMap() {
           bearingRef.current?.setHeading(null);
           setFollow(false);
         });
+        map.on("click", (event) => {
+          const hit = nearestHome(
+            homesRef.current,
+            { lat: event.latlng.lat, lon: event.latlng.lng },
+            SNAP_METERS,
+          );
+          if (!hit) return;
+          selectRef.current(hit.home.id, "map");
+        });
         if (cancelled) {
           map.remove();
           return;
@@ -316,15 +339,27 @@ export default function ViolationsMap() {
     const layer = markersRef.current;
     if (!map || !L || !layer || !mapReady) return;
     layer.clearLayers();
-    const visible = homes.filter((home) => matchesFilter(home, filter) || home.id === activeId);
+    const visible = [...homes].sort((a, b) => {
+      const rank = (home: Home) => (home.id === activeId ? 2 : markerTone(home, filter, activeId) === "vivid" ? 1 : 0);
+      return rank(a) - rank(b);
+    });
     for (const home of visible) {
+      const tone = markerTone(home, filter, activeId);
+      const size = tone === "quiet" ? 36 : 44;
       const marker = L.marker([home.lat, home.lon], {
         icon: L.divIcon({
           className: "pv-divicon",
-          html: markerHtml(home.address, home.status, home.id === activeId, clearedIds.includes(home.id)),
-          iconSize: [44, 44],
-          iconAnchor: [22, 22],
+          html: markerHtml(
+            home.address,
+            home.status,
+            home.id === activeId,
+            clearedIds.includes(home.id),
+            tone === "quiet",
+          ),
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
         }),
+        zIndexOffset: home.id === activeId ? 800 : tone === "vivid" ? 400 : 0,
         keyboard: true,
         title: home.address,
       });
@@ -576,7 +611,6 @@ export default function ViolationsMap() {
   const nearest = useMemo(() => {
     if (!geo) return [];
     return homes
-      .filter((home) => home.status === "red" || home.status === "orange")
       .map((home) => ({ home, meters: haversineMeters(geo, home) }))
       .sort((a, b) => a.meters - b.meters)
       .slice(0, 3);
@@ -584,8 +618,9 @@ export default function ViolationsMap() {
 
   const results = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return [];
-    return homes.filter((home) => home.address.toLowerCase().includes(q)).slice(0, 8);
+    const sorted = [...homes].sort((a, b) => a.address.localeCompare(b.address, "en", { numeric: true }));
+    if (!q) return sorted;
+    return sorted.filter((home) => home.address.toLowerCase().includes(q));
   }, [homes, query]);
 
   const counts = useMemo(
@@ -636,14 +671,24 @@ export default function ViolationsMap() {
           : scope === "week"
             ? new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
             : undefined;
-      const message = await shareFieldReport({
+      const result = await shareFieldReport({
         homes,
         entries: field.entries,
         homeId: scope === "home" ? activeId ?? undefined : undefined,
         from,
         scope,
       });
-      setExportMessage(message);
+      const unsentIds = result.entryIds.filter((id) => {
+        const entry = field.entries.find((item) => item.id === id);
+        return !entry || entry.reportStatus !== "sent";
+      });
+      if (unsentIds.length > 0) {
+        setExportMessage(null);
+        setSentPrompt({ message: result.message, ids: unsentIds });
+      } else {
+        setSentPrompt(null);
+        setExportMessage(result.message);
+      }
     } catch (err) {
       if ((err as { name?: string }).name === "AbortError") return;
       setExportMessage(err instanceof Error ? err.message : "Could not export.");
@@ -673,7 +718,7 @@ export default function ViolationsMap() {
 
       <TopChrome
         panel={panel}
-        setPanel={setPanel}
+        setPanel={setChrome}
         query={query}
         setQuery={setQuery}
         results={results}
@@ -683,6 +728,7 @@ export default function ViolationsMap() {
         counts={counts}
         data={data}
         pendingCount={field.pendingCount}
+        unsentCount={field.entries.filter((entry) => entry.reportStatus !== "sent").length}
         onExportDrive={() => void exportReport("drive")}
         onExportWeek={() => void exportReport("week")}
         onExportAll={() => void exportReport("all")}
@@ -690,9 +736,36 @@ export default function ViolationsMap() {
         listId={listId}
       />
 
-      {(dataError || mapError || geoError || field.storageError || exportMessage) && (
-        <div className="banner alert-banner" role="alert">
-          <p>{dataError || mapError || geoError || field.storageError || exportMessage}</p>
+      {panel === "queue" && (
+        <SentryQueue
+          entries={field.entries}
+          busy={field.flushing}
+          onClose={() => setChrome(null)}
+          onSetStatus={field.markReportStatus}
+        />
+      )}
+
+      {(dataError || mapError || geoError || field.storageError || exportMessage || sentPrompt) && (
+        <div className="banner alert-banner" role="status">
+          <p>
+            {sentPrompt
+              ? `${sentPrompt.message} Mark ${sentPrompt.ids.length} as sent to Sentry?`
+              : dataError || mapError || geoError || field.storageError || exportMessage}
+          </p>
+          {sentPrompt && (
+            <button
+              type="button"
+              onClick={() => {
+                void field.markReportStatus(sentPrompt.ids, "sent").then((ok) => {
+                  if (!ok) return;
+                  setSentPrompt(null);
+                  setExportMessage("Marked as sent to Sentry.");
+                });
+              }}
+            >
+              Mark sent
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
@@ -701,20 +774,21 @@ export default function ViolationsMap() {
               setGeoError(null);
               field.clearStorageError();
               setExportMessage(null);
+              setSentPrompt(null);
             }}
           >
-            Dismiss
+            {sentPrompt ? "Not yet" : "Dismiss"}
           </button>
         </div>
       )}
 
       <div className="dock">
         {follow && (
-          <div className="nearest" aria-label="Nearest homes with open items">
+          <div className="nearest" aria-label="Nearest homes">
             {nearest.length === 0 && (
               <div className="nearest-card">
-                <strong>No open homes nearby</strong>
-                <em>Waiting for location</em>
+                <strong>No homes nearby</strong>
+                <em>{geo ? "No address in the loaded file is close to you" : "Waiting for location"}</em>
               </div>
             )}
             {nearest.map(({ home, meters }) => (
@@ -839,6 +913,7 @@ export default function ViolationsMap() {
                 onCreate={field.create}
                 onPatch={field.patch}
                 onDelete={field.remove}
+                onSetReportStatus={field.markReportStatus}
                 onExport={() => exportReport("home")}
               />
               <h3>Arrears</h3>

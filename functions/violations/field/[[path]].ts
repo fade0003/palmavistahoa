@@ -9,9 +9,11 @@ import {
   cleanCategory,
   cleanCoordinate,
   cleanDisposition,
+  cleanEntryIds,
   cleanHomeId,
   cleanKind,
   cleanNote,
+  cleanReportStatus,
   cleanSnapshot,
   FieldInputError,
 } from "../../../lib/field/validate";
@@ -23,6 +25,7 @@ import {
   listEntries,
   readPhoto,
   readPhotoFiles,
+  setReportStatus,
   updateEntry,
   type FieldBindings,
 } from "./store";
@@ -87,6 +90,10 @@ export const onRequest: PagesFunction<Env, "path"> = async (context) => {
 
     if (parts.length === 1 && parts[0] === "entries" && method === "POST") {
       return await createFromRequest(context.request, db, context.env.FIELD_PHOTOS, auth.email);
+    }
+
+    if (parts.length === 1 && parts[0] === "report-status" && method === "POST") {
+      return await reportStatusFromRequest(context.request, db);
     }
 
     if (parts.length === 2 && parts[0] === "entries" && method === "PATCH") {
@@ -155,6 +162,17 @@ async function createFromRequest(
     photos,
   });
   return json({ entry }, 201);
+}
+
+async function reportStatusFromRequest(request: Request, db: D1Database): Promise<Response> {
+  let body: { ids?: unknown; status?: unknown };
+  try {
+    body = (await request.json()) as { ids?: unknown; status?: unknown };
+  } catch {
+    throw new FieldInputError("Status update must be JSON.");
+  }
+  const entries = await setReportStatus(db, cleanEntryIds(body.ids), cleanReportStatus(body.status));
+  return json({ entries });
 }
 
 async function patchFromRequest(

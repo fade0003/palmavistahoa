@@ -1,6 +1,6 @@
 import { violationKey } from "../../../lib/field/keys";
-import { FIELD_SCHEMA } from "../../../lib/field/schema";
-import type { FieldDisposition, FieldEntry, FieldKind, FieldPhoto } from "../../../lib/field/types";
+import { FIELD_SCHEMA, reportStatusMigrations } from "../../../lib/field/schema";
+import type { FieldDisposition, FieldEntry, FieldKind, FieldPhoto, ReportStatus } from "../../../lib/field/types";
 import {
   FieldInputError,
   MAX_PHOTOS,
@@ -31,6 +31,8 @@ interface EntryRow {
   sentry_code: string | null;
   sentry_description: string | null;
   sentry_status: string | null;
+  report_status: string | null;
+  sent_at: string | null;
 }
 
 interface PhotoRow {
@@ -49,9 +51,19 @@ const schemaReady = new WeakMap<D1Database, Promise<void>>();
 export function ensureFieldSchema(db: D1Database): Promise<void> {
   let pending = schemaReady.get(db);
   if (!pending) {
-    pending = db
-      .batch(FIELD_SCHEMA.map((sql) => db.prepare(sql)))
-      .then(() => undefined);
+    pending = (async () => {
+      await db.batch(FIELD_SCHEMA.map((sql) => db.prepare(sql)));
+      const info = await db.prepare("PRAGMA table_info(field_entries)").all<{ name: string }>();
+      const names = (info.results ?? []).map((row) => row.name);
+      for (const sql of reportStatusMigrations(names)) {
+        try {
+          await db.prepare(sql).run();
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          if (!/duplicate column/i.test(message)) throw err;
+        }
+      }
+    })();
     schemaReady.set(db, pending);
     pending.catch(() => schemaReady.delete(db));
   }
@@ -81,6 +93,8 @@ function toEntry(row: EntryRow, photos: PhotoRow[]): FieldEntry {
     sentryCode: row.sentry_code,
     sentryDescription: row.sentry_description,
     sentryStatus: row.sentry_status,
+    reportStatus: row.report_status === "sent" ? "sent" : "pending",
+    sentAt: row.sent_at,
     photos: photos
       .filter((photo) => photo.entry_id === row.id)
       .sort((a, b) => a.sort_index - b.sort_index)
@@ -149,8 +163,9 @@ export async function createEntry(
       `INSERT INTO field_entries (
         id, home_id, address, kind, violation_key, disposition, category, note,
         lat, lon, author_email, created_at, updated_at,
-        sentry_date, sentry_code, sentry_description, sentry_status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        sentry_date, sentry_code, sentry_description, sentry_status,
+        report_status, sent_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
@@ -170,6 +185,8 @@ export async function createEntry(
       input.sentry?.code ?? null,
       input.sentry?.description ?? null,
       input.sentry?.status ?? null,
+      "pending",
+      null,
     )
     .run();
 
@@ -199,6 +216,38 @@ export async function createEntry(
   const created = await entryById(db, id);
   if (!created) throw new Error("insert-missing");
   return created;
+}
+
+export async function setReportStatus(
+  db: D1Database,
+  ids: string[],
+  status: ReportStatus,
+): Promise<FieldEntry[]> {
+  const now = new Date().toISOString();
+  const chunkSize = 25;
+  for (let index = 0; index < ids.length; index += chunkSize) {
+    const chunk = ids.slice(index, index + chunkSize);
+    await db.batch(
+      chunk.map((id) =>
+        status === "sent"
+          ? db
+              .prepare(
+                "UPDATE field_entries SET report_status = 'sent', sent_at = COALESCE(sent_at, ?) WHERE id = ?",
+              )
+              .bind(now, id)
+          : db
+              .prepare("UPDATE field_entries SET report_status = 'pending', sent_at = NULL WHERE id = ?")
+              .bind(id),
+      ),
+    );
+  }
+  const updated: FieldEntry[] = [];
+  for (const id of ids) {
+    const entry = await entryById(db, id);
+    if (entry) updated.push(entry);
+  }
+  if (updated.length === 0) throw new FieldInputError("Those observations were not found.", 404);
+  return updated;
 }
 
 export async function updateEntry(

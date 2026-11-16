@@ -6,6 +6,7 @@
 
 import { requireAccess, type AccessEnv } from "../../lib/access/verify-access";
 import { VIOLATIONS_KEY, violationsDataResponse } from "../../lib/violations/respond";
+import { PROPERTIES_KEY, mergePropertyRoster } from "../../lib/violations/roster";
 
 interface Env extends AccessEnv {
   VIOLATIONS_KV?: KVNamespace;
@@ -34,6 +35,15 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     if ((!raw || !raw.trim()) && localDev(context.request, context.env) && context.env.ASSETS) {
       const asset = await context.env.ASSETS.fetch(new URL("/dev-fixtures/violations.sample.json", context.request.url));
       if (asset.ok) raw = await asset.text();
+    }
+    if (raw && raw.trim()) {
+      let roster: string | null = null;
+      try {
+        roster = await kv.get(PROPERTIES_KEY, "text");
+      } catch (err) {
+        console.error("VIOLATIONS_KV roster read failed", err);
+      }
+      raw = mergePropertyRoster(raw, roster);
     }
     return violationsDataResponse({ bindingPresent: true, raw });
   } catch (err) {
