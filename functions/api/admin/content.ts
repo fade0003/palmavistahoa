@@ -1,7 +1,9 @@
 // Protected admin endpoint — GET/POST /api/admin/content
-// Access controlled by Cloudflare Access policy on /api/admin/*
+// Cloudflare Access covers /api/admin/*, and this function checks the Access JWT too.
 
-interface Env {
+import { requireAccess, type AccessEnv } from "../../../lib/access/verify-access";
+
+interface Env extends AccessEnv {
   HOA_CONTENT: KVNamespace;
 }
 
@@ -18,6 +20,9 @@ export const onRequestOptions: PagesFunction = async () =>
   new Response(null, { status: 204, headers: corsHeaders });
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const denied = await requireAccess(context.request, context.env);
+  if (denied) return denied;
+
   const url = new URL(context.request.url);
   const key = url.searchParams.get("key");
 
@@ -33,6 +38,9 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 };
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const denied = await requireAccess(context.request, context.env);
+  if (denied) return denied;
+
   let body: { key: string; data: unknown };
 
   try {
